@@ -1,6 +1,12 @@
 import type { Dict } from "./en";
 
 export const zh: Dict = {
+  "set.toolbarLocation": "工具列位置",
+  "set.toolbarLocation.desc": "選擇表格功能選單的顯示位置。",
+  "set.toolbarLocation.floating": "浮動",
+  "set.toolbarLocation.sidebar": "側邊欄",
+  "cmd.openToolbar": "在側邊欄開啟工具列",
+
   "cmd.insertRowAbove": "在上方插入行",
   "cmd.insertRowBelow": "在下方插入行",
   "cmd.insertColLeft": "在左侧插入列",

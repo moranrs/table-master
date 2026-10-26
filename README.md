@@ -24,6 +24,19 @@ When the cursor enters a GFM table the floating toolbar appears above the first 
 - Format / re-pad table
 - Paste a table copied from Excel / a web page (HTML or TSV is detected automatically)
 
+### Docked sidebar toolbar
+
+Set **Toolbar position** to **Sidebar** to move the same toolbar actions into
+Obsidian's right dock. The floating toolbar is hidden in this mode. The panel can
+be moved or closed like other workspace views; use **Open toolbar in sidebar**
+to reveal it again. Switch back to **Floating** to keep the existing floating
+placement options.
+
+Sidebar actions use the last active, still-open Markdown editor when the panel
+receives focus. Table actions are disabled outside a table; the grid editor and
+clipboard import remain available in an editable note. Existing installations
+keep their floating toolbar preference, including a previously hidden toolbar.
+
 ### 2. Right-click menu
 
 All table operations are also available from the editor's right-click menu when the cursor is inside a table.
@@ -122,6 +135,7 @@ Every action is exposed as a command and can be bound to a hotkey from **Setting
 | `move-col-left`          | Move column left                  |
 | `move-col-right`         | Move column right                 |
 | `align-left/center/right/none` | Align column                |
+| `merge-selection` | Merge selected cells (Live Preview widget or text selection) |
 | `merge-up`               | Merge with cell above             |
 | `merge-down`             | Merge with cell below             |
 | `merge-left`             | Merge with cell to the left       |
