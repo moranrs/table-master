@@ -23,6 +23,7 @@ export type FloatingToolbarPosition =
 export interface TableMasterSettings {
   outputFormat: OutputFormat;
   showFloatingToolbar: boolean;
+  toolbarPosition: "floating" | "sidebar";
   floatingToolbarPosition: FloatingToolbarPosition;
   enableTabNavigation: boolean;
   defaultAlign: Align;
@@ -32,6 +33,7 @@ export interface TableMasterSettings {
 export const DEFAULT_SETTINGS: TableMasterSettings = {
   outputFormat: "extended",
   showFloatingToolbar: true,
+  toolbarPosition: "floating",
   floatingToolbarPosition: "on-click",
   enableTabNavigation: true,
   defaultAlign: "none",
@@ -82,36 +84,43 @@ export class TableMasterSettingTab extends PluginSettingTab {
       });
 
     new Setting(containerEl)
-      .setName(t("set.showToolbar"))
-      .setDesc(t("set.showToolbar.desc"))
-      .addToggle((tg) => {
-        tg.setValue(this.plugin.settings.showFloatingToolbar);
-        tg.onChange(async (v) => {
-          this.plugin.settings.showFloatingToolbar = v;
+      .setName(t("set.toolbarLocation"))
+      .setDesc(t("set.toolbarLocation.desc"))
+      .addDropdown((dd) => {
+        dd.addOption("floating", t("set.toolbarLocation.floating"));
+        dd.addOption("sidebar", t("set.toolbarLocation.sidebar"));
+        dd.setValue(this.plugin.settings.toolbarPosition);
+        dd.onChange(async (v) => {
+          this.plugin.settings.toolbarPosition = v as "floating" | "sidebar";
+          this.plugin.settings.showFloatingToolbar = true;
           await this.plugin.saveSettings();
-          this.plugin.broadcastSettingsChanged();
+          await this.plugin.syncToolbarPosition();
+          this.display();
         });
       });
 
-    new Setting(containerEl)
-      .setName(t("set.toolbarPosition"))
-      .setDesc(t("set.toolbarPosition.desc"))
-      .addDropdown((dd) => {
-        dd.addOption("on-click", t("set.toolbarPosition.onClick"));
-        dd.addOption("follow-mouse", t("set.toolbarPosition.followMouse"));
-        dd.addOption("top-left", t("set.toolbarPosition.topLeft"));
-        // Old config files may still hold the removed `above-table` value;
-        // fall back to the new default so the dropdown shows a valid choice.
-        const current = (this.plugin.settings.floatingToolbarPosition as string) === "above-table"
-          ? "on-click"
-          : this.plugin.settings.floatingToolbarPosition;
-        dd.setValue(current);
-        dd.onChange(async (v) => {
-          this.plugin.settings.floatingToolbarPosition = v as FloatingToolbarPosition;
-          await this.plugin.saveSettings();
-          this.plugin.broadcastSettingsChanged();
+    if (this.plugin.settings.toolbarPosition === "floating") {
+      new Setting(containerEl)
+        .setName(t("set.toolbarPosition"))
+        .setDesc(t("set.toolbarPosition.desc"))
+        .addDropdown((dd) => {
+          dd.addOption("on-click", t("set.toolbarPosition.onClick"));
+          dd.addOption("follow-mouse", t("set.toolbarPosition.followMouse"));
+          dd.addOption("top-left", t("set.toolbarPosition.topLeft"));
+          // Old config files may still hold the removed `above-table` value;
+          // fall back to the new default so the dropdown shows a valid choice.
+          const current = (this.plugin.settings.floatingToolbarPosition as string) === "above-table"
+            ? "on-click"
+            : this.plugin.settings.floatingToolbarPosition;
+          dd.setValue(current);
+          dd.onChange(async (v) => {
+            this.plugin.settings.floatingToolbarPosition = v as FloatingToolbarPosition;
+            await this.plugin.saveSettings();
+            this.plugin.broadcastSettingsChanged();
+          });
         });
-      });
+
+    }
 
     new Setting(containerEl)
       .setName(t("set.tabNavigation"))

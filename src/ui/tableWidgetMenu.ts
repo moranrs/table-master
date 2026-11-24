@@ -178,7 +178,7 @@ function clickedSourcePosition(
  * editor's text selection alone never spans multiple cells).
  */
 export function findActiveWidgetSelection(plugin: TableMasterPlugin): CellRange | undefined {
-  const md = plugin.app.workspace.getActiveViewOfType(MarkdownView);
+  const md = plugin.getTargetMarkdownView();
   if (!md) return undefined;
   const cm = (md.editor as unknown as { cm?: EditorView }).cm;
   if (!cm) return undefined;

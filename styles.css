@@ -107,7 +107,8 @@ table th.tm-merge-placeholder {
   display: none;
 }
 
-.tm-floating-toolbar .tm-group {
+.tm-floating-toolbar .tm-group,
+.tm-sidebar-toolbar .tm-group {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -117,11 +118,13 @@ table th.tm-merge-placeholder {
   border-bottom: 1px solid var(--background-modifier-border);
 }
 
-.tm-floating-toolbar .tm-group:last-child {
+.tm-floating-toolbar .tm-group:last-child,
+.tm-sidebar-toolbar .tm-group:last-child {
   border-bottom: none;
 }
 
-.tm-floating-toolbar button.tm-btn {
+.tm-floating-toolbar button.tm-btn,
+.tm-sidebar-toolbar button.tm-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -135,17 +138,20 @@ table th.tm-merge-placeholder {
   cursor: pointer;
 }
 
-.tm-floating-toolbar button.tm-btn:hover {
+.tm-floating-toolbar button.tm-btn:hover,
+.tm-sidebar-toolbar button.tm-btn:hover {
   background: var(--background-modifier-hover);
   color: var(--text-normal);
 }
 
-.tm-floating-toolbar button.tm-btn.is-active {
+.tm-floating-toolbar button.tm-btn.is-active,
+.tm-sidebar-toolbar button.tm-btn.is-active {
   background: var(--background-modifier-active-hover);
   color: var(--text-accent);
 }
 
-.tm-floating-toolbar button.tm-btn .tm-icon {
+.tm-floating-toolbar button.tm-btn .tm-icon,
+.tm-sidebar-toolbar button.tm-btn .tm-icon {
   width: 16px;
   height: 16px;
 }
@@ -306,4 +312,15 @@ table th[data-tm-merge="anchor"][rowspan]:not([rowspan="1"]),
 table.tm-grid td[rowspan]:not([rowspan="1"]),
 table.tm-grid th[rowspan]:not([rowspan="1"]) {
   vertical-align: middle;
+}
+
+/* Docked toolbar shares the floating toolbar's actions and button styles. */
+.tm-sidebar-toolbar .tm-toolbar-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tm-sidebar-toolbar button.tm-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
 }

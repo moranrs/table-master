@@ -1,4 +1,10 @@
 export const en = {
+  "set.toolbarLocation": "Toolbar position",
+  "set.toolbarLocation.desc": "Choose where the table toolbar appears.",
+  "set.toolbarLocation.floating": "Floating",
+  "set.toolbarLocation.sidebar": "Sidebar",
+  "cmd.openToolbar": "Open toolbar in sidebar",
+
   // Commands
   "cmd.insertRowAbove": "Insert row above",
   "cmd.insertRowBelow": "Insert row below",

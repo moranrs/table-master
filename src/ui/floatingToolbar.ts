@@ -14,9 +14,7 @@ import { App, MarkdownView } from "obsidian";
 import type TableMasterPlugin from "../main";
 import { Icons } from "./icons";
 import { t } from "../i18n";
-import * as actions from "../editor/actions";
-import { getActionContext } from "../editor/contextHelper";
-import { findActiveWidgetSelection } from "./tableWidgetMenu";
+import { appendSvgIcon, renderToolbar } from "./toolbarButtons";
 
 /** Resolve the CM6 EditorView that is currently the *active* markdown editor.
  *  Returns null when the active workspace leaf isn't a markdown view (file
@@ -35,20 +33,6 @@ function activeMarkdownEditorView(app: App): EditorView | null {
 interface ToolbarHost {
   getApp(): App;
   getPlugin(): TableMasterPlugin;
-}
-
-interface ToolbarItem {
-  icon: string;
-  tip: string;
-  run: () => void;
-}
-
-function appendSvgIcon(parent: HTMLElement, icon: string): void {
-  const parsedIcon = new DOMParser().parseFromString(icon, "image/svg+xml");
-  const iconEl = parsedIcon.documentElement;
-  if (iconEl && iconEl.nodeName.toLowerCase() === "svg") {
-    parent.appendChild(iconEl);
-  }
 }
 
 export function buildFloatingToolbarExt(host: ToolbarHost) {
@@ -141,8 +125,9 @@ export function buildFloatingToolbarExt(host: ToolbarHost) {
       raf: number | null = null;
 
       update(u: ViewUpdate) {
+        if (u.docChanged || u.selectionSet || u.focusChanged) host.getPlugin().refreshSidebar();
         const settings = host.getPlugin().settings;
-        if (!settings.showFloatingToolbar) {
+        if ((!settings.showFloatingToolbar || settings.toolbarPosition !== "floating")) {
           this.hide();
           return;
         }
@@ -195,7 +180,7 @@ export function buildFloatingToolbarExt(host: ToolbarHost) {
       /** Shared entry point used by both `update()` and the mouse handler. */
       refresh(view: EditorView) {
         const settings = host.getPlugin().settings;
-        if (!settings.showFloatingToolbar) {
+        if ((!settings.showFloatingToolbar || settings.toolbarPosition !== "floating")) {
           this.removeMouseListener();
           // Note: we do NOT remove the mousedown listener here; it self-gates
           // on `showFloatingToolbar` and must stay attached so re-enabling
@@ -299,7 +284,7 @@ export function buildFloatingToolbarExt(host: ToolbarHost) {
           const target = e.target as HTMLElement | null;
           this.mouseInTable = !!target?.closest?.("table");
           const settings = host.getPlugin().settings;
-          if (!settings.showFloatingToolbar) return;
+          if ((!settings.showFloatingToolbar || settings.toolbarPosition !== "floating")) return;
           if (settings.floatingToolbarPosition !== "follow-mouse") return;
           if (this.raf != null) return;
           this.raf = requestAnimationFrame(() => {
@@ -340,7 +325,7 @@ export function buildFloatingToolbarExt(host: ToolbarHost) {
         if (this.mouseDownListener) return;
         const fn = (e: MouseEvent) => {
           const settings = host.getPlugin().settings;
-          if (!settings.showFloatingToolbar) return;
+          if ((!settings.showFloatingToolbar || settings.toolbarPosition !== "floating")) return;
           if (settings.floatingToolbarPosition !== "on-click") return;
           const target = e.target as HTMLElement | null;
           if (!target) return;
@@ -434,74 +419,7 @@ export function buildFloatingToolbarExt(host: ToolbarHost) {
         // Content wrapper holds all button groups.
         const content = this.dom.createDiv({ cls: "tm-toolbar-content" });
 
-        const groups: ToolbarItem[][] = [
-          [
-            { icon: Icons.rowAbove, tip: t("tip.insertRowAbove"), run: () => this.act(actions.insertRowAbove) },
-            { icon: Icons.rowBelow, tip: t("tip.insertRowBelow"), run: () => this.act(actions.insertRowBelow) },
-            { icon: Icons.colLeft, tip: t("tip.insertColLeft"), run: () => this.act(actions.insertColLeft) },
-            { icon: Icons.colRight, tip: t("tip.insertColRight"), run: () => this.act(actions.insertColRight) },
-            { icon: Icons.delRow, tip: t("tip.deleteRow"), run: () => this.act(actions.deleteRow) },
-            { icon: Icons.delCol, tip: t("tip.deleteCol"), run: () => this.act(actions.deleteCol) },
-          ],
-          [
-            { icon: Icons.moveUp, tip: t("tip.moveRowUp"), run: () => this.act(actions.moveRowUp) },
-            { icon: Icons.moveDown, tip: t("tip.moveRowDown"), run: () => this.act(actions.moveRowDown) },
-            { icon: Icons.moveLeft, tip: t("tip.moveColLeft"), run: () => this.act(actions.moveColLeft) },
-            { icon: Icons.moveRight, tip: t("tip.moveColRight"), run: () => this.act(actions.moveColRight) },
-          ],
-          [
-            { icon: Icons.alignLeft, tip: t("tip.alignLeft"), run: () => this.act((c) => actions.alignColumn(c, "left")) },
-            { icon: Icons.alignCenter, tip: t("tip.alignCenter"), run: () => this.act((c) => actions.alignColumn(c, "center")) },
-            { icon: Icons.alignRight, tip: t("tip.alignRight"), run: () => this.act((c) => actions.alignColumn(c, "right")) },
-          ],
-          [
-            {
-              icon: Icons.mergeSelection,
-              tip: t("tip.mergeSelection"),
-              // Prefer Obsidian's table-widget visual selection (Live Preview)
-              // when present, falling back to the editor's text selection.
-              // The widget's selection isn't reflected in the editor's text
-              // range, so calling actions.mergeSelection blindly would emit
-              // "selection is not a valid rectangle" inside the widget.
-              run: () => {
-                const range = findActiveWidgetSelection(host.getPlugin());
-                if (range) {
-                  this.act((c) => actions.mergeCellRange(c, range.r1, range.c1, range.r2, range.c2));
-                  return;
-                }
-                this.act(actions.mergeSelection);
-              },
-            },
-            { icon: Icons.mergeUp, tip: t("tip.mergeUp"), run: () => this.act(actions.mergeUp) },
-            { icon: Icons.mergeDown, tip: t("tip.mergeDown"), run: () => this.act(actions.mergeDown) },
-            { icon: Icons.mergeLeft, tip: t("tip.mergeLeft"), run: () => this.act(actions.mergeLeft) },
-            { icon: Icons.split, tip: t("tip.split"), run: () => this.act(actions.splitCell) },
-          ],
-          [
-            { icon: Icons.grid, tip: t("tip.gridEditor"), run: () => host.getPlugin().openGridEditor() },
-            { icon: Icons.format, tip: t("tip.format"), run: () => this.act(actions.formatTable) },
-            {
-              icon: Icons.importTable,
-              tip: t("tip.importTable"),
-              run: () => void host.getPlugin().importTableFromClipboard(),
-            },
-          ],
-        ];
-
-        for (const group of groups) {
-          const g = content.createDiv({ cls: "tm-group" });
-          for (const item of group) {
-            const btn = g.createEl("button", { cls: "tm-btn" });
-            btn.setAttribute("aria-label", item.tip);
-            btn.title = item.tip;
-            appendSvgIcon(btn, item.icon);
-            btn.addEventListener("click", (e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              item.run();
-            });
-          }
-        }
+        renderToolbar(content, host.getPlugin());
 
         const toggleBtn = this.dom.createDiv({ cls: "tm-collapse-toggle" });
         toggleBtn.setAttribute("aria-label", t("tip.collapseToolbar"));
@@ -560,11 +478,6 @@ export function buildFloatingToolbarExt(host: ToolbarHost) {
         });
       }
 
-      act(fn: (ctx: actions.ActionContext) => void) {
-        const ctx = getActionContext(host.getApp(), host.getPlugin());
-        if (!ctx) return;
-        fn(ctx);
-      }
     },
   );
 }
