@@ -1,11 +1,11 @@
 import type { Dict } from "./en";
 
 export const zh: Dict = {
-  "set.toolbarLocation": "工具列位置",
-  "set.toolbarLocation.desc": "選擇表格功能選單的顯示位置。",
-  "set.toolbarLocation.floating": "浮動",
-  "set.toolbarLocation.sidebar": "側邊欄",
-  "cmd.openToolbar": "在側邊欄開啟工具列",
+  "set.toolbarLocation": "工具栏位置",
+  "set.toolbarLocation.desc": "选择表格功能菜单的显示位置。",
+  "set.toolbarLocation.floating": "浮动",
+  "set.toolbarLocation.sidebar": "侧边栏",
+  "cmd.openToolbar": "在侧边栏打开工具栏",
 
   "cmd.insertRowAbove": "在上方插入行",
   "cmd.insertRowBelow": "在下方插入行",
@@ -120,4 +120,5 @@ export const zh: Dict = {
   "set.language.auto": "跟随 Obsidian",
   "set.language.en": "English",
   "set.language.zh": "中文",
+  "set.language.zhTW": "繁體中文",
 };

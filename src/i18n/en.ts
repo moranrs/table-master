@@ -124,6 +124,7 @@ export const en = {
   "set.language.auto": "Auto",
   "set.language.en": "English",
   "set.language.zh": "中文",
+  "set.language.zhTW": "繁體中文",
 };
 
 export type Dict = typeof en;

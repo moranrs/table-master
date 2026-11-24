@@ -47,7 +47,14 @@ function readSettings(data: unknown): Partial<TableMasterSettings> {
   if (data.defaultAlign === "left" || data.defaultAlign === "center" || data.defaultAlign === "right" || data.defaultAlign === "none") {
     settings.defaultAlign = data.defaultAlign;
   }
-  if (data.language === "auto" || data.language === "en" || data.language === "zh") settings.language = data.language;
+  if (
+    data.language === "auto" ||
+    data.language === "en" ||
+    data.language === "zh" ||
+    data.language === "zh-TW"
+  ) {
+    settings.language = data.language;
+  }
   return settings;
 }
 

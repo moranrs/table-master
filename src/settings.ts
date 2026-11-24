@@ -61,6 +61,7 @@ export class TableMasterSettingTab extends PluginSettingTab {
         dd.addOption("auto", t("set.language.auto"));
         dd.addOption("en", t("set.language.en"));
         dd.addOption("zh", t("set.language.zh"));
+        dd.addOption("zh-TW", t("set.language.zhTW"));
         dd.setValue(this.plugin.settings.language);
         dd.onChange(async (v) => {
           this.plugin.settings.language = v as LangChoice;

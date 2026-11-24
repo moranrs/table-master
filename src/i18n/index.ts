@@ -1,14 +1,25 @@
 import { en, type Dict } from "./en";
 import { zh } from "./zh";
+import { zhTW } from "./zh-TW";
 
 export type LangKey = keyof Dict;
-export type LangChoice = "auto" | "en" | "zh";
+export type LangChoice = "auto" | "en" | "zh" | "zh-TW";
 
 let active: Dict = en;
+
+/** True for Traditional Chinese locales (zh-TW / zh-HK / zh-Hant). */
+function isTraditionalChinese(lang: string): boolean {
+  const l = lang.toLowerCase();
+  return l.includes("tw") || l.includes("hk") || l.includes("hant");
+}
 
 export function setLanguage(choice: LangChoice): void {
   if (choice === "zh") {
     active = zh;
+    return;
+  }
+  if (choice === "zh-TW") {
+    active = zhTW;
     return;
   }
   if (choice === "en") {
@@ -17,7 +28,11 @@ export function setLanguage(choice: LangChoice): void {
   }
   // auto: detect from window.moment locale or navigator.language
   const lang = detectObsidianLocale();
-  active = lang.startsWith("zh") ? zh : en;
+  if (lang.startsWith("zh")) {
+    active = isTraditionalChinese(lang) ? zhTW : zh;
+    return;
+  }
+  active = en;
 }
 
 function detectObsidianLocale(): string {
