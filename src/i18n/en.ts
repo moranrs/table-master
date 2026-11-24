@@ -28,6 +28,7 @@ export const en = {
   "cmd.formatTable": "Format / re-pad table",
   "cmd.sortAsc": "Sort column ascending",
   "cmd.sortDesc": "Sort column descending",
+  "cmd.transposeTable": "Transpose table",
   "cmd.openGridEditor": "Open grid editor",
   "cmd.toggleFloating": "Toggle floating toolbar",
   "cmd.nextCell": "Next cell",
@@ -61,6 +62,7 @@ export const en = {
   "tip.split": "Split cell",
   "tip.gridEditor": "Open grid editor",
   "tip.format": "Format",
+  "tip.transposeTable": "Transpose table",
   "tip.importTable": "Paste table from clipboard",
   "tip.collapseToolbar": "Collapse / expand toolbar",
 

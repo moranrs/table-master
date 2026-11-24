@@ -29,6 +29,7 @@ export const zh: Dict = {
   "cmd.formatTable": "格式化表格",
   "cmd.sortAsc": "按列升序排序",
   "cmd.sortDesc": "按列降序排序",
+  "cmd.transposeTable": "转置表格",
   "cmd.openGridEditor": "打开网格编辑器",
   "cmd.toggleFloating": "切换浮动工具栏",
   "cmd.nextCell": "下一个单元格（Tab）",
@@ -61,6 +62,7 @@ export const zh: Dict = {
   "tip.split": "拆分单元格",
   "tip.gridEditor": "打开网格编辑器",
   "tip.format": "格式化",
+  "tip.transposeTable": "转置表格",
   "tip.importTable": "从剪贴板导入表格（Excel / 网页）",
   "tip.collapseToolbar": "收起 / 展开工具栏",
 

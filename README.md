@@ -68,7 +68,7 @@ Run the command **Open grid editor** (or click the grid button on the toolbar) t
 
 The parser also accepts every other Table Extended construct:
 
-- **Headerless tables** (block starts with the separator row)
+- **Headerless tables** (block starts with the separator row) — recognized by the parser/serializer. Note: Obsidian's own renderer still expects a header row, so a separator-first block may show as plain text in Source / Live Preview / Reading view. If you need it to render, use a normal table (an empty header row is fine) or set the output format to HTML.
 - **Table caption** — `[Caption text]` or `[Caption text][label]` immediately above or below
 - **Multiple header rows** (any rows above the separator row)
 - **Multiple `<tbody>` sections** by inserting a single blank line inside the body

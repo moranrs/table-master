@@ -94,6 +94,7 @@ export function addInTableMenuItems(
   menu.addSeparator();
   menu.addItem((i) => i.setTitle(t("cmd.openGridEditor")).setIcon("grid").onClick(() => plugin.openGridEditor()));
   menu.addItem((i) => i.setTitle(t("cmd.formatTable")).setIcon("text").onClick(() => actions.formatTable(ctx)));
+  menu.addItem((i) => i.setTitle(t("cmd.transposeTable")).setIcon("arrow-left-right").onClick(() => actions.transposeTable(ctx)));
 }
 
 /** Append the not-in-table fallback entries (open grid editor / paste). */

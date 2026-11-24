@@ -296,6 +296,7 @@ export default class TableMasterPlugin extends Plugin {
     editorCmd("format-table", t("cmd.formatTable"), actions.formatTable);
     editorCmd("sort-asc", t("cmd.sortAsc"), (c) => actions.sort(c, "asc"));
     editorCmd("sort-desc", t("cmd.sortDesc"), (c) => actions.sort(c, "desc"));
+    editorCmd("transpose-table", t("cmd.transposeTable"), actions.transposeTable);
 
     // Open grid editor. Available everywhere — `openGridEditor` itself
     // picks between editing the current table, designing a new one and

@@ -35,4 +35,6 @@ export const Icons = {
   // Chevron arrows for toolbar collapse/expand toggle.
   chevronLeft: wrap('<polyline points="15 18 9 12 15 6"/>'),
   chevronRight: wrap('<polyline points="9 18 15 12 9 6"/>'),
+  // Transpose: two arrows swapping horizontal <-> vertical.
+  transpose: wrap('<path d="M4 7h13"/><path d="M14 4l3 3-3 3"/><path d="M20 17H7"/><path d="M10 14l-3 3 3 3"/>'),
 };

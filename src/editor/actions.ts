@@ -347,6 +347,14 @@ export function sort(ctx: ActionContext, dir: "asc" | "desc"): void {
   applyModel(ctx, loc, r.model);
 }
 
+/** Transpose the table at the cursor (swap rows and columns). */
+export function transposeTable(ctx: ActionContext): void {
+  const loc = resolve(ctx.editor);
+  if (!loc) return;
+  const m = ops.transpose(loc.model);
+  applyModel(ctx, loc, m, { row: 0, col: 0 });
+}
+
 /** Replace the current table block with a new model produced elsewhere. */
 export function replaceTable(ctx: ActionContext, newModel: TableModel): void {
   const loc = resolve(ctx.editor);

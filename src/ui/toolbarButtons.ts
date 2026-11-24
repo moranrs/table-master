@@ -58,6 +58,7 @@ export function renderToolbar(content: HTMLElement, plugin: TableMasterPlugin): 
     [
       { requiresTable: false, icon: Icons.grid, tip: t("tip.gridEditor"), run: () => plugin.openGridEditor() },
       { icon: Icons.format, tip: t("tip.format"), run: () => act(actions.formatTable) },
+      { icon: Icons.transpose, tip: t("tip.transposeTable"), run: () => act(actions.transposeTable) },
       {
         requiresTable: false,
         icon: Icons.importTable,

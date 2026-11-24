@@ -365,3 +365,56 @@ export function setCellText(model: TableModel, r: number, c: number, text: strin
   m.rows[a.r][a.c].raw = text;
   return m;
 }
+
+/**
+ * Transpose the whole table (rows <-> columns). Merged regions swap their
+ * rowspan/colspan; placeholders are regenerated so the merge structure stays
+ * consistent. Column alignment has no row equivalent after a transpose, so it
+ * is reset to `none`. tbody breaks become meaningless and are cleared.
+ */
+export function transpose(model: TableModel): TableModel {
+  recomputeSpans(model);
+  const oldRows = model.rows.length;
+  const oldCols = model.cols;
+  const newRows = oldCols;
+  const newCols = oldRows;
+
+  const grid: Cell[][] = [];
+  for (let r = 0; r < newRows; r++) {
+    grid.push(new Array(newCols).fill(0).map(() => makeAnchor("")));
+  }
+
+  for (let r = 0; r < oldRows; r++) {
+    for (let c = 0; c < oldCols; c++) {
+      const cell = model.rows[r][c];
+      if (!cell.isAnchor) continue;
+      const spanRows = Math.max(1, cell.rowspan);
+      const spanCols = Math.max(1, cell.colspan);
+      const nr = c;
+      const nc = r;
+      if (nr >= newRows || nc >= newCols) continue;
+      grid[nr][nc] = makeAnchor(cell.raw);
+      // Old (spanRows x spanCols) becomes (spanCols x spanRows).
+      for (let dr = 0; dr < spanCols; dr++) {
+        for (let dc = 0; dc < spanRows; dc++) {
+          if (dr === 0 && dc === 0) continue;
+          const rr = nr + dr;
+          const cc = nc + dc;
+          if (rr >= newRows || cc >= newCols) continue;
+          grid[rr][cc] = dr > 0 ? makeMergeUp(1, 0) : makeMergeLeft(1, 0);
+        }
+      }
+    }
+  }
+
+  const m: TableModel = {
+    rows: grid,
+    aligns: new Array(newCols).fill("none") as Align[],
+    headerRows: model.headerRows > 0 ? Math.min(model.headerRows, newRows) : 0,
+    cols: newCols,
+    caption: model.caption ? { ...model.caption } : undefined,
+    tbodyBreaks: [],
+  };
+  recomputeSpans(m);
+  return m;
+}
