@@ -13,7 +13,7 @@
 // stays in a state CM6 considers consistent.
 
 import { EditorView, ViewPlugin, ViewUpdate, PluginValue } from "@codemirror/view";
-import { isSeparatorLine, looksLikeTableLine, parseTable } from "../table/parser";
+import { isSeparatorLine, looksLikeDelimitedTableLine, looksLikeTableLine, parseTable } from "../table/parser";
 import type { TableModel } from "../table/model";
 
 export function buildLivePreviewExt() {
@@ -200,7 +200,54 @@ interface TableSource {
   toLine: number;
 }
 
-function collectTableSources(lines: string[]): TableSource[] {
+function isCaptionLine(line: string): boolean {
+  return /^\s*\[[^\]]+\](?:\s*\[[^\]]+\])?\s*$/.test(line);
+}
+
+/** Callout title like `[!note]` / `[!warning]` — never table content. */
+function isCalloutMarker(line: string): boolean {
+  return /^\s*\[![^\]]+\]\s*$/.test(line);
+}
+
+function isTableSeparatorLine(line: string): boolean {
+  return looksLikeTableLine(line) && isSeparatorLine(line);
+}
+
+function isSourceTableLine(line: string): boolean {
+  return looksLikeTableLine(line) || isTableSeparatorLine(line) || isCaptionLine(line);
+}
+
+/** Strip any number of leading blockquote markers (`> `), so tables inside
+ *  Callouts are detected/parsed as if they were top-level tables (issue #6). */
+function stripBlockquote(line: string): string {
+  let s = line;
+  for (;;) {
+    const m = s.match(/^\s*>\s?/);
+    if (!m) break;
+    s = s.slice(m[0].length);
+  }
+  return s;
+}
+
+/** Index in `buf` where the header of the table ending at the next separator
+ *  starts, dropping non-delimited prose (e.g. a `[[Page|alias]]` paragraph)
+ *  that was mistaken for a header row (issue #5). */
+function headerStartBeforeSeparator(buf: string[]): number {
+  let start = buf.length;
+  if (start === 0 || !looksLikeTableLine(buf[start - 1])) return start;
+  start--;
+  while (start > 0) {
+    const prev = buf[start - 1];
+    if (isCaptionLine(prev) || looksLikeDelimitedTableLine(prev)) {
+      start--;
+      continue;
+    }
+    break;
+  }
+  return start;
+}
+
+export function collectTableSources(lines: string[]): TableSource[] {
   const blocks: TableSource[] = [];
   let buf: string[] = [];
   let bufStart = -1;
@@ -226,27 +273,41 @@ function collectTableSources(lines: string[]): TableSource[] {
   };
 
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
+    const line = stripBlockquote(lines[i]);
+    if (isCalloutMarker(line)) {
+      // Callout title lines like `[!note]` are not table content; the callout
+      // body that follows may still contain a (blockquote-prefixed) table.
+      if (inTable) flush();
+      continue;
+    }
     if (line.trim() === "") {
       if (!inTable) continue;
       blanks++;
       if (blanks >= 2) {
         flush();
       } else {
-        buf.push(line);
+        buf.push("");
         bufEnd = i;
       }
       continue;
     }
-    if (looksLikeTableLine(line) || isSeparatorLine(line) || /^\s*\[[^\]]+\](?:\s*\[[^\]]+\])?\s*$/.test(line)) {
+    if (isSourceTableLine(line)) {
       // A second separator line means a new table is starting — flush the
       // previous one. Pop any header line(s) that belong to the new table.
-      if (isSeparatorLine(line) && hasSep) {
+      if (isTableSeparatorLine(line) && !hasSep) {
+        // Drop non-delimited prose (e.g. a `[[wikilink|alias]]` paragraph)
+        // buffered as a would-be header before this separator (issue #5).
+        const keepFrom = headerStartBeforeSeparator(buf);
+        if (keepFrom > 0) {
+          buf = buf.slice(keepFrom);
+          bufStart += keepFrom;
+        }
+      } else if (isTableSeparatorLine(line) && hasSep) {
         // Count how many non-blank, non-separator lines at the end of buf
         // belong to the new table's header.
         let headerCount = 0;
         for (let j = buf.length - 1; j >= 0; j--) {
-          if (buf[j].trim() === "" || isSeparatorLine(buf[j])) break;
+          if (buf[j].trim() === "" || isTableSeparatorLine(buf[j])) break;
           headerCount++;
         }
         const newHeaderLines = buf.splice(buf.length - headerCount, headerCount);
@@ -270,7 +331,7 @@ function collectTableSources(lines: string[]): TableSource[] {
       bufEnd = i;
       blanks = 0;
       inTable = true;
-      if (isSeparatorLine(line)) hasSep = true;
+      if (isTableSeparatorLine(line)) hasSep = true;
       continue;
     }
     if (inTable) flush();

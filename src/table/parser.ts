@@ -84,6 +84,22 @@ export function looksLikeTableLine(line: string): boolean {
   return false;
 }
 
+/** Returns whether the line looks like a delimited Markdown table row. */
+export function looksLikeDelimitedTableLine(line: string): boolean {
+  const s = line.trim();
+  let escaped = false;
+  let pipes = 0;
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] === "\\") {
+      escaped = !escaped;
+      continue;
+    }
+    if (s[i] === "|" && !escaped) pipes++;
+    escaped = false;
+  }
+  return pipes > 0 && (s.startsWith("|") || s.endsWith("|") || pipes >= 2);
+}
+
 export interface ParseResult {
   model: TableModel;
   /** True if the parser had to relax some checks (e.g. ragged rows). */

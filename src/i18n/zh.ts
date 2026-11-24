@@ -113,6 +113,7 @@ export const zh: Dict = {
   "set.toolbarPosition.onClick": "平时左上角，点击表格时跳到点击处（默认）",
   "set.toolbarPosition.followMouse": "鼠标进入表格时跟随鼠标，平时停在编辑器左上角",
   "set.toolbarPosition.topLeft": "始终停在编辑器左上角",
+  "set.toolbarPosition.clickOnly": "平时不显示，点击表格时显示",
   "set.tabNavigation": "启用 Tab 单元格跳转",
   "set.tabNavigation.desc": "使用 Tab / Shift-Tab / Enter 在单元格之间移动。",
   "set.defaultAlign": "默认列对齐",

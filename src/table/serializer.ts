@@ -82,22 +82,28 @@ function splitCellLines(cell: Cell): string[] {
 export function serializeExtended(model: TableModel): string {
   recomputeSpans(model);
   const cols = model.cols;
-  const widths = Array.from({ length: cols }, (): number => 3);
+  // Content width per column = widest token. The delimiter dashes must match
+  // this *content* width (not the padded width), otherwise the separator row
+  // ends up 2 characters wider than the data rows and every column is
+  // visually misaligned (issue #11).
+  const cw = Array.from({ length: cols }, (): number => 1);
   for (const row of model.rows) {
     for (let c = 0; c < cols; c++) {
       const cell = row[c];
       if (isColspanPlaceholder(cell)) continue;
       for (const tok of splitCellLines(cell)) {
         const w = displayWidth(tok);
-        if (w + 2 > widths[c]) widths[c] = w + 2;
+        if (w > cw[c]) cw[c] = w;
       }
     }
   }
   for (let c = 0; c < cols; c++) {
     const a = model.aligns[c];
-    const minSep = a === "center" ? 5 : a === "left" || a === "right" ? 4 : 3;
-    if (widths[c] < minSep) widths[c] = minSep;
+    // Keep at least 3 hyphens; left/right add a colon, center needs two colons.
+    const minDashes = a === "center" ? 5 : a === "left" || a === "right" ? 4 : 3;
+    if (cw[c] < minDashes) cw[c] = minDashes;
   }
+  const widths = cw.map((w) => w + 2);
 
   const lines: string[] = [];
   const cap = captionLine(model);
@@ -107,7 +113,7 @@ export function serializeExtended(model: TableModel): string {
     lines.push(...formatRow(model.rows[r], widths, model.aligns));
   }
   const sep = model.aligns
-    .map((a, i) => alignToSep(a, widths[i]))
+    .map((a, i) => alignToSep(a, cw[i]))
     .map((s) => ` ${s} `.replace(/^\s|\s$/g, ""));
   lines.push("| " + sep.join(" | ") + " |");
 

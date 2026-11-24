@@ -18,7 +18,8 @@ import { setLanguage, t } from "./i18n";
 export type FloatingToolbarPosition =
   | "on-click"
   | "follow-mouse"
-  | "top-left";
+  | "top-left"
+  | "click-only";
 
 export interface TableMasterSettings {
   outputFormat: OutputFormat;
@@ -108,6 +109,7 @@ export class TableMasterSettingTab extends PluginSettingTab {
           dd.addOption("on-click", t("set.toolbarPosition.onClick"));
           dd.addOption("follow-mouse", t("set.toolbarPosition.followMouse"));
           dd.addOption("top-left", t("set.toolbarPosition.topLeft"));
+          dd.addOption("click-only", t("set.toolbarPosition.clickOnly"));
           // Old config files may still hold the removed `above-table` value;
           // fall back to the new default so the dropdown shows a valid choice.
           const current = (this.plugin.settings.floatingToolbarPosition as string) === "above-table"

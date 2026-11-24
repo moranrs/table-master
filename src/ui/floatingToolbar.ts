@@ -15,6 +15,8 @@ import type TableMasterPlugin from "../main";
 import { Icons } from "./icons";
 import { t } from "../i18n";
 import { appendSvgIcon, renderToolbar } from "./toolbarButtons";
+import type { FloatingToolbarPosition } from "../settings";
+import { findTableBlock } from "../editor/tableLocator";
 
 /** Resolve the CM6 EditorView that is currently the *active* markdown editor.
  *  Returns null when the active workspace leaf isn't a markdown view (file
@@ -41,6 +43,14 @@ export function buildFloatingToolbarExt(host: ToolbarHost) {
       view: EditorView;
       dom: HTMLElement;
       visible = false;
+      /** Gate: becomes true after the first paint settles, so we never reveal
+       *  the toolbar before its stylesheet is applied (prevents the one-time
+       *  "large → small" flash on first plugin enable). */
+      revealed = false;
+      /** Remembered collapsed state of the *docked* (top-left) presentation.
+       *  When the toolbar jumps next to a cell it is forced expanded (and the
+       *  toggle is hidden), but the docked state is restored on return. */
+      dockedCollapsed = false;
       lastFrom = -1;
 
       constructor(view: EditorView) {
@@ -62,6 +72,11 @@ export function buildFloatingToolbarExt(host: ToolbarHost) {
         // `display` style — obsidianmd lint forbids static style.display
         // assignments because they bypass theme overrides.
         this.dom.classList.add("is-hidden");
+        // Belt-and-braces: the native `hidden` attribute (plus the
+        // `.tm-floating-toolbar[hidden]` CSS rule) hides the toolbar even
+        // before styles.css is applied, so an unstyled full-width box never
+        // flashes on screen.
+        this.dom.hidden = true;
         // Stop bubbling to avoid Obsidian re-focusing editor and dropping cursor
         this.dom.addEventListener("mousedown", (e) => e.preventDefault());
         // IMPORTANT: mount on <body>, not view.dom.parentElement. Some
@@ -103,7 +118,7 @@ export function buildFloatingToolbarExt(host: ToolbarHost) {
         // self-gates on the current mode, so it's a no-op while the user is
         // in `follow-mouse` / `top-left` mode.
         this.ensureMouseDownListener();
-        this.update({ view, docChanged: true, selectionSet: true } as unknown as ViewUpdate);
+        this.scheduleInitialReveal();
       }
 
       // Most recent mouse coords *in viewport-relative pixels* — fed by a
@@ -115,6 +130,7 @@ export function buildFloatingToolbarExt(host: ToolbarHost) {
       clientX = 0;
       clientY = 0;
       mouseInTable = false;
+      hoveredCell: HTMLElement | null = null;
       /** True while the on-click toolbar is positioned at the last click
        *  point (inside a table). Cleared when the user clicks outside. */
       clickedInTable = false;
@@ -212,63 +228,88 @@ export function buildFloatingToolbarExt(host: ToolbarHost) {
           this.hide();
           return;
         }
-        // Normalize the (now-removed) `above-table` value left over in old
-        // configs to the new default so the rest of this function only has
-        // to worry about the three live modes.
+        // Normalize legacy/unknown values to a live mode.
         const rawMode = settings.floatingToolbarPosition as string;
-        const mode: "on-click" | "follow-mouse" | "top-left" =
-          rawMode === "follow-mouse" || rawMode === "top-left" ? rawMode : "on-click";
+        const mode: FloatingToolbarPosition =
+          rawMode === "follow-mouse" || rawMode === "top-left" || rawMode === "click-only"
+            ? (rawMode as FloatingToolbarPosition)
+            : "on-click";
         const parent = view.dom.parentElement;
         if (!parent) {
           this.hide();
           return;
         }
 
-        // Manage the mousemove listener, but NOT the mousedown listener.
-        // The mousedown listener is installed once at construction time and
-        // self-gates on the current mode — removing it would make on-click
-        // mode miss the first click after a mode switch.
-        if (mode !== "follow-mouse" && mode !== "top-left") this.removeMouseListener();
+        const inTable = this.hasTableContext();
 
-        // Mode `on-click` — toolbar rests at the editor's top-left corner
-        // and jumps to the click position when the user clicks inside a
-        // table; clicks outside any table snap it back to the corner.
-        // The mousedown listener (installed at construction time) handles
-        // the jump; refresh() keeps it parked at top-left the rest of the
-        // time.
-        if (mode === "on-click") {
-          this.ensureVisible();
-          if (!this.clickedInTable) {
-            this.placeTopLeft(view);
+        // Only `follow-mouse` needs the continuous mousemove listener.
+        if (mode === "follow-mouse") this.ensureMouseListener();
+        else this.removeMouseListener();
+
+        // `click-only`: hidden until the user clicks a table cell.
+        if (mode === "click-only") {
+          if ((inTable || this.mouseInTable) && this.clickedInTable) {
+            if (this.hoveredCell) this.placeNearCell(this.hoveredCell);
+            else this.placeAtMouse();
+          } else {
+            if (!inTable && !this.mouseInTable) this.clickedInTable = false;
+            this.hide();
           }
           return;
         }
 
-        // Modes `follow-mouse` and `top-left` are *always-visible* anchors
-        // so the user can hit table commands even if our table-detection
-        // logic gets confused by the active theme. They use `position:
-        // fixed` to bypass any parent-positioning quirks.
+        // These three modes stay visible whenever the editor is focused; only
+        // `click-only` (handled above) stays hidden until a table cell is
+        // clicked. `top-left` stays put; `follow-mouse` tracks the pointer;
+        // `on-click` parks top-left until a cell click recenters it.
         this.ensureVisible();
-        this.ensureMouseListener();
+
         if (mode === "top-left") {
           this.placeTopLeft(view);
           return;
         }
-        // `follow-mouse`: placement is driven *entirely* by the mousemove
-        // handler. refresh() must NOT call placeAtMouse here — otherwise
-        // every click / keystroke (which produces a selectionSet update)
-        // would re-snap the toolbar to the current pointer, which the user
-        // perceives as "a popup at the click position" identical to the
-        // on-click mode. We only seed an initial top-left position so the
-        // toolbar isn't stranded at (0,0) before the first mousemove.
-        if (!this.dom.style.top) this.placeTopLeft(view);
+
+        if (mode === "follow-mouse") {
+          if (this.mouseInTable && this.hoveredCell) this.placeNearCell(this.hoveredCell);
+          else if (this.mouseInTable) this.placeAtMouse();
+          else this.placeTopLeft(view);
+          return;
+        }
+
+        // `on-click`: park at top-left, then sit next to the cell that was
+        // clicked inside the table.
+        if (this.clickedInTable) {
+          if (this.hoveredCell) this.placeNearCell(this.hoveredCell);
+          else this.placeAtMouse();
+        } else {
+          this.placeTopLeft(view);
+        }
       }
 
       /** Make the toolbar measurable & visible without leaving it at a stale position. */
       private ensureVisible() {
+        if (!this.revealed) return;
+        this.dom.hidden = false;
         if (this.dom.classList.contains("is-hidden")) {
           this.dom.classList.remove("is-hidden");
           this.visible = true;
+        }
+      }
+
+      /** Reveal only after two animation frames so the plugin stylesheet and
+       *  initial layout are in place. This eliminates the one-time
+       *  "grows then shrinks" flash seen the first time the plugin is enabled. */
+      private scheduleInitialReveal() {
+        const win = this.view.dom.ownerDocument.defaultView ?? activeWindow;
+        const reveal = () => {
+          this.revealed = true;
+          this.dom.classList.add("is-ready");
+          this.refresh(this.view);
+        };
+        if (typeof win.requestAnimationFrame === "function") {
+          win.requestAnimationFrame(() => win.requestAnimationFrame(reveal));
+        } else {
+          win.setTimeout(reveal, 0);
         }
       }
 
@@ -282,6 +323,7 @@ export function buildFloatingToolbarExt(host: ToolbarHost) {
           this.clientX = e.clientX;
           this.clientY = e.clientY;
           const target = e.target as HTMLElement | null;
+          this.hoveredCell = target?.closest?.("td, th") ?? null;
           this.mouseInTable = !!target?.closest?.("table");
           const settings = host.getPlugin().settings;
           if ((!settings.showFloatingToolbar || settings.toolbarPosition !== "floating")) return;
@@ -297,7 +339,8 @@ export function buildFloatingToolbarExt(host: ToolbarHost) {
             if (rect.width === 0 || rect.height === 0) return;
             this.ensureVisible();
             if (this.mouseInTable && !this.dom.classList.contains("is-collapsed")) {
-              this.placeAtMouse();
+              if (this.hoveredCell) this.placeNearCell(this.hoveredCell);
+              else this.placeAtMouse();
             } else {
               this.placeTopLeft(this.view);
             }
@@ -312,6 +355,7 @@ export function buildFloatingToolbarExt(host: ToolbarHost) {
         this.view.dom.removeEventListener("mousemove", this.mouseListener);
         this.mouseListener = null;
         this.mouseInTable = false;
+        this.hoveredCell = null;
       }
 
       /**
@@ -326,7 +370,8 @@ export function buildFloatingToolbarExt(host: ToolbarHost) {
         const fn = (e: MouseEvent) => {
           const settings = host.getPlugin().settings;
           if ((!settings.showFloatingToolbar || settings.toolbarPosition !== "floating")) return;
-          if (settings.floatingToolbarPosition !== "on-click") return;
+          const mode = settings.floatingToolbarPosition as string;
+          if (mode !== "on-click" && mode !== "click-only") return;
           const target = e.target as HTMLElement | null;
           if (!target) return;
           // Click on the toolbar itself: don't hide, don't reposition; let
@@ -343,19 +388,24 @@ export function buildFloatingToolbarExt(host: ToolbarHost) {
           if (target.closest("table")) {
             this.clientX = e.clientX;
             this.clientY = e.clientY;
+            this.hoveredCell = target.closest<HTMLElement>("td, th");
+            this.mouseInTable = true;
             this.clickedInTable = true;
-            this.ensureVisible();
-            // When collapsed, keep the toolbar pinned at top-left so the
-            // small toggle button doesn't jump around the viewport.
-            if (this.dom.classList.contains("is-collapsed")) {
-              this.placeTopLeft(this.view);
+            // Position first, then reveal — so the toolbar appears directly at
+            // the click position instead of flashing at its previous spot.
+            if (this.hoveredCell) {
+              this.placeNearCell(this.hoveredCell);
             } else {
               this.placeAtMouse();
             }
           } else {
             this.clickedInTable = false;
-            this.ensureVisible();
-            this.placeTopLeft(this.view);
+            this.hoveredCell = null;
+            this.mouseInTable = false;
+            // `click-only` hides again after clicking outside a table; the
+            // other modes simply return to the editor's top-left corner.
+            if (mode === "click-only") this.hide();
+            else this.placeTopLeft(this.view);
           }
         };
         // Listen on the view's own document so the on-click handler still
@@ -371,8 +421,8 @@ export function buildFloatingToolbarExt(host: ToolbarHost) {
       }
 
       hide() {
-        if (!this.visible) return;
         this.dom.classList.add("is-hidden");
+        this.dom.hidden = true;
         this.visible = false;
       }
 
@@ -384,10 +434,51 @@ export function buildFloatingToolbarExt(host: ToolbarHost) {
        */
       private placeTopLeft(view: EditorView) {
         const rect = view.dom.getBoundingClientRect();
-        this.ensureVisible();
         const baseLeft = Math.max(rect.left, 0);
         this.dom.style.top = `${Math.max(rect.top, 0)}px`;
         this.dom.style.left = `${baseLeft}px`;
+        // Docked presentation → the collapse toggle is available.
+        this.dom.classList.remove("is-near-cell");
+        this.applyDockedState();
+        this.ensureVisible();
+      }
+
+      /** True when the caret/selection is inside a rendered table. */
+      private hasTableContext(): boolean {
+        const sel = this.view.dom.ownerDocument.getSelection();
+        const node = sel?.anchorNode;
+        const anchor = node instanceof HTMLElement ? node : node?.parentElement;
+        const table = anchor?.closest?.("table");
+        if (table && this.view.dom.contains(table)) return true;
+
+        const doc = this.view.state.doc;
+        const line = doc.lineAt(this.view.state.selection.main.head).number - 1;
+        return (
+          findTableBlock(
+            (n) => (n < 0 || n >= doc.lines ? null : doc.line(n + 1).text),
+            doc.lines,
+            line,
+          ) !== null
+        );
+      }
+
+      /** Place the toolbar just below a table cell (slightly overlapping its
+       *  bottom border) instead of on top of the cell / next cell. */
+      private placeNearCell(cell: HTMLElement) {
+        const rect = cell.getBoundingClientRect();
+        const myWidth = this.dom.offsetWidth || 200;
+        const myHeight = this.dom.offsetHeight || 80;
+        const win = this.view.dom.ownerDocument.defaultView ?? activeWindow;
+        const maxLeft = win.innerWidth - myWidth - 4;
+        const maxTop = win.innerHeight - myHeight - 4;
+        const left = Math.min(Math.max(rect.left, 4), Math.max(maxLeft, 4));
+        const top = Math.min(Math.max(rect.bottom - 2, 4), Math.max(maxTop, 4));
+        this.dom.style.top = `${top}px`;
+        this.dom.style.left = `${left}px`;
+        // Docked next to a cell → no collapse toggle, always expanded.
+        this.dom.classList.add("is-near-cell");
+        this.expandIfCollapsed();
+        this.ensureVisible();
       }
 
       /**
@@ -399,7 +490,6 @@ export function buildFloatingToolbarExt(host: ToolbarHost) {
       private placeAtMouse() {
         // `position: fixed` lives in styles.css; only the dynamic top/left
         // are set inline (see comment in placeTopLeft).
-        this.ensureVisible();
         const myWidth = this.dom.offsetWidth || 200;
         const myHeight = this.dom.offsetHeight || 80;
         // Clamp against the editor's own window so popout-window toolbars
@@ -411,6 +501,42 @@ export function buildFloatingToolbarExt(host: ToolbarHost) {
         const top = Math.min(Math.max(this.clientY, 4), Math.max(maxTop, 4));
         this.dom.style.top = `${top}px`;
         this.dom.style.left = `${left}px`;
+        this.dom.classList.add("is-near-cell");
+        this.expandIfCollapsed();
+        this.ensureVisible();
+      }
+
+      /** When the toolbar jumps next to a table cell it must be fully expanded,
+       *  because the collapse toggle is hidden in that presentation. */
+      private expandIfCollapsed() {
+        if (!this.dom.classList.contains("is-collapsed")) return;
+        this.dom.classList.remove("is-collapsed");
+        const content = this.dom.querySelector<HTMLElement>(".tm-toolbar-content");
+        if (content) {
+          content.classList.remove("is-size-locked");
+          content.setCssProps({ "--tm-locked-width": "", "--tm-locked-height": "" });
+        }
+      }
+
+      /** Restore the remembered docked collapsed/expanded state. */
+      private applyDockedState() {
+        const content = this.dom.querySelector<HTMLElement>(".tm-toolbar-content");
+        if (this.dockedCollapsed) {
+          this.dom.classList.add("is-collapsed");
+          if (content && content.dataset.tmWidth && content.dataset.tmHeight) {
+            content.setCssProps({
+              "--tm-locked-width": `${content.dataset.tmWidth}px`,
+              "--tm-locked-height": `${content.dataset.tmHeight}px`,
+            });
+            content.classList.add("is-size-locked");
+          }
+        } else {
+          this.dom.classList.remove("is-collapsed");
+          if (content) {
+            content.classList.remove("is-size-locked");
+            content.setCssProps({ "--tm-locked-width": "", "--tm-locked-height": "" });
+          }
+        }
       }
 
       render() {
@@ -418,20 +544,16 @@ export function buildFloatingToolbarExt(host: ToolbarHost) {
 
         // Content wrapper holds all button groups.
         const content = this.dom.createDiv({ cls: "tm-toolbar-content" });
-
         renderToolbar(content, host.getPlugin());
 
+        // Collapse toggle: only shown in the docked (top-left) presentation.
+        // This rule is enforced in CSS via `.is-near-cell` (added by
+        // placeNearCell/placeAtMouse), so the button disappears when the
+        // toolbar jumps next to a table cell.
         const toggleBtn = this.dom.createDiv({ cls: "tm-collapse-toggle" });
         toggleBtn.setAttribute("aria-label", t("tip.collapseToolbar"));
         toggleBtn.title = t("tip.collapseToolbar");
         appendSvgIcon(toggleBtn, Icons.chevronLeft);
-        // The collapse animation needs the content's natural size pinned for
-        // the duration of the transition (otherwise the flex child snaps
-        // straight to 0 with no animation). Rather than writing
-        // element.style.width/height directly — which obsidianmd's lint
-        // forbids — we publish the measured size as CSS custom properties via
-        // `setCssProps` and toggle a `.is-size-locked` class that consumes
-        // them (see styles.css).
         const lockContentSize = () => {
           const w = content.offsetWidth;
           const h = content.offsetHeight;
@@ -458,7 +580,7 @@ export function buildFloatingToolbarExt(host: ToolbarHost) {
             lockContentSize();
             void content.offsetWidth;
             this.dom.classList.add("is-collapsed");
-            // Pin to top-left so the collapsed toggle doesn't float mid-table.
+            this.dockedCollapsed = true;
             this.placeTopLeft(this.view);
             this.clickedInTable = false;
           } else {
@@ -470,8 +592,7 @@ export function buildFloatingToolbarExt(host: ToolbarHost) {
               content.classList.add("is-size-locked");
             }
             this.dom.classList.remove("is-collapsed");
-            // Use the view's own window timer so the cleanup still fires
-            // when the editor is in a popout window.
+            this.dockedCollapsed = false;
             const win = this.view.dom.ownerDocument.defaultView ?? activeWindow;
             win.setTimeout(unlockContentSize, 350);
           }

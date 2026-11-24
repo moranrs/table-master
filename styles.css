@@ -29,6 +29,13 @@
   display: none;
 }
 
+/* The native `hidden` attribute must win over the author `display:flex` rule
+ * below, so the toolbar stays invisible even if this stylesheet is still being
+ * applied (avoids an unstyled full-width flash on first enable). */
+.tm-floating-toolbar[hidden] {
+  display: none;
+}
+
 /* Inner wrapper that stacks functional groups vertically. 
  * Has its own overflow:hidden so the collapse animation clips content
  * without affecting the toggle button. */
@@ -39,6 +46,11 @@
   gap: 2px;
   flex: 0 0 auto;
   overflow: hidden;
+}
+
+/* Enable the collapse width/opacity animation only after the first paint, so
+ * the initial reveal cannot animate from an unstyled/oversized box. */
+.tm-floating-toolbar.is-ready .tm-toolbar-content {
   transition: width 0.3s ease, opacity 0.25s ease;
 }
 
@@ -82,6 +94,12 @@
 .tm-floating-toolbar .tm-collapse-toggle:hover {
   background: var(--background-modifier-hover);
   color: var(--text-normal);
+}
+
+/* Hide the collapse toggle while the toolbar is docked next to a table cell;
+ * it only belongs to the top-left docked presentation. */
+.tm-floating-toolbar.is-near-cell .tm-collapse-toggle {
+  display: none;
 }
 
 /* When collapsed the toolbar slides left past the viewport; content stays in
@@ -275,29 +293,8 @@ table.tm-rendered td {
   line-height: var(--line-height-normal, 1.5);
 }
 
-table.tm-rendered th {
-  background: var(--background-secondary);
-  font-weight: var(--font-semibold, 600);
-}
-
 table.tm-rendered tbody + tbody {
   border-top: 2px solid var(--background-modifier-border);
-}
-
-/* Highlight merged anchors so the user can spot the merged region at a
- * glance. The legacy `.tm-merged-anchor` class is kept for backward compat,
- * but the actual marker on rendered tables is `data-tm-merge="anchor"`
- * (set by Live Preview) and the `[rowspan]` / `[colspan]` attributes
- * (set by Reading-view rebuild + grid editor). */
-table.tm-rendered td.tm-merged-anchor,
-table.tm-rendered th.tm-merged-anchor,
-table.tm-rendered td[rowspan]:not([rowspan="1"]),
-table.tm-rendered th[rowspan]:not([rowspan="1"]),
-table.tm-rendered td[colspan]:not([colspan="1"]),
-table.tm-rendered th[colspan]:not([colspan="1"]),
-table td[data-tm-merge="anchor"],
-table th[data-tm-merge="anchor"] {
-  background-color: var(--background-secondary-alt);
 }
 
 /* Vertically center the text inside any cell that spans more than one row.

@@ -113,6 +113,7 @@ export const zhTW: Dict = {
   "set.toolbarPosition.onClick": "平時在左上角，點選表格時跳到點選處（預設）",
   "set.toolbarPosition.followMouse": "滑鼠進入表格時跟隨滑鼠，平時停在編輯器左上角",
   "set.toolbarPosition.topLeft": "始終停在編輯器左上角",
+  "set.toolbarPosition.clickOnly": "平時不顯示，點選表格時顯示",
   "set.tabNavigation": "啟用 Tab 儲存格跳轉",
   "set.tabNavigation.desc": "使用 Tab / Shift-Tab / Enter 在儲存格之間移動。",
   "set.defaultAlign": "預設欄對齊",

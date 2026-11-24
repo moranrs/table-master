@@ -117,6 +117,7 @@ export const en = {
   "set.toolbarPosition.onClick": "Top-left corner; jump to click position in table (default)",
   "set.toolbarPosition.followMouse": "Follow mouse inside table; top-left otherwise",
   "set.toolbarPosition.topLeft": "Always at the editor's top-left",
+  "set.toolbarPosition.clickOnly": "Hidden; show only when clicking a table",
   "set.tabNavigation": "Enable tab navigation",
   "set.tabNavigation.desc": "Use tab, shift-tab or enter to move between cells.",
   "set.defaultAlign": "Default column alignment",

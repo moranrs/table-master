@@ -39,7 +39,8 @@ function readSettings(data: unknown): Partial<TableMasterSettings> {
   if (
     data.floatingToolbarPosition === "on-click" ||
     data.floatingToolbarPosition === "follow-mouse" ||
-    data.floatingToolbarPosition === "top-left"
+    data.floatingToolbarPosition === "top-left" ||
+    data.floatingToolbarPosition === "click-only"
   ) {
     settings.floatingToolbarPosition = data.floatingToolbarPosition;
   }

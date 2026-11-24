@@ -4,7 +4,7 @@
 // CodeMirror internal changes.
 
 import type { Editor, EditorPosition } from "obsidian";
-import { isSeparatorLine, looksLikeTableLine, splitRow } from "../table/parser";
+import { isSeparatorLine, looksLikeDelimitedTableLine, looksLikeTableLine, splitRow } from "../table/parser";
 
 export interface TableLocation {
   /** First line index (0-based) of the table block (header). */
@@ -29,7 +29,11 @@ export function isCaptionLine(line: string): boolean {
 }
 
 export function isTableContextLine(line: string): boolean {
-  return looksLikeTableLine(line) || isSeparatorLine(line);
+  return looksLikeTableLine(line) || isTableSeparatorLine(line);
+}
+
+export function isTableSeparatorLine(line: string): boolean {
+  return looksLikeTableLine(line) && isSeparatorLine(line);
 }
 
 export function isStructuralTableLine(line: string): boolean {
@@ -64,7 +68,7 @@ export function findTableBlock(
   //    directions, never cross another separator, never cross 2+ blanks, and
   //    never cross a non-table non-blank line.
   const findSep = (dir: 1 | -1): number => {
-    if (isSeparatorLine(cur)) return cursorLine;
+    if (isTableSeparatorLine(cur)) return cursorLine;
     let i = cursorLine;
     let blanks = 0;
     while (true) {
@@ -72,7 +76,7 @@ export function findTableBlock(
       if (i < 0 || i >= lineCount) return -1;
       const line = getLineFn(i);
       if (line == null) return -1;
-      if (isSeparatorLine(line)) return i;
+      if (isTableSeparatorLine(line)) return i;
       if (line.trim() === "") {
         blanks++;
         if (blanks >= 2) return -1;
@@ -100,11 +104,18 @@ export function findTableBlock(
   //    blank line means the table ends there. Crossing another separator is
   //    forbidden so the previous table can't be glued on.
   let start = sepLine;
+  let firstHeaderLine = true;
   while (start > 0) {
     const prev = getLineFn(start - 1);
     if (prev == null) break;
-    if (isSeparatorLine(prev)) break;
-    if (!isStructuralTableLine(prev)) break;
+    if (isTableSeparatorLine(prev)) break;
+    if (isCaptionLine(prev)) {
+      start--;
+      continue;
+    }
+    if (!looksLikeTableLine(prev)) break;
+    if (!firstHeaderLine && !looksLikeDelimitedTableLine(prev)) break;
+    firstHeaderLine = false;
     start--;
   }
 
@@ -114,7 +125,7 @@ export function findTableBlock(
   while (end < lineCount - 1) {
     const next = getLineFn(end + 1);
     if (next == null) break;
-    if (isSeparatorLine(next)) break;
+    if (isTableSeparatorLine(next)) break;
     if (isStructuralTableLine(next)) {
       end++;
       continue;
@@ -129,7 +140,7 @@ export function findTableBlock(
       while (j < lineCount) {
         const peek = getLineFn(j);
         if (peek == null) break;
-        if (isSeparatorLine(peek)) {
+        if (isTableSeparatorLine(peek)) {
           sawSep = true;
           break;
         }
@@ -147,6 +158,15 @@ export function findTableBlock(
   }
 
   if (cursorLine < start || cursorLine > end) return null;
+  let hasContentRow = false;
+  for (let i = start; i <= end; i++) {
+    const line = getLineFn(i);
+    if (line && !isTableSeparatorLine(line) && looksLikeTableLine(line)) {
+      hasContentRow = true;
+      break;
+    }
+  }
+  if (!hasContentRow) return null;
   return { startLine: start, endLine: end, sepLine };
 }
 
