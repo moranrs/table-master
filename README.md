@@ -151,11 +151,12 @@ Every action is exposed as a command and can be bound to a hotkey from **Setting
 ## Settings
 
 - **Merged-cell output format** — Extended (`^^` for rowspan, trailing `||` for colspan; same as Table Extended) or raw HTML (`colspan` / `rowspan` attributes on a `<table>`)
-- **Show floating toolbar**
+- **Toolbar position** — Floating / Sidebar / Don't show. Pick **Don't show** to turn the toolbar off entirely.
 - **Floating toolbar position** — three modes (all use `position: fixed` so a custom theme can't hide them; non-focused tabs auto-hide their own toolbar):
   - `Pop up at click position when clicking a table` (default): the toolbar stays hidden until you click inside a table, then springs up at the click point and stays there until you click outside any table.
   - `Follow mouse inside table; top-left otherwise`: always visible while the editor is focused. Trails the mouse pointer whenever it's hovering a table; falls back to the top-left of the editor when not.
   - `Always at the editor's top-left`: pinned at the top-left of the editor pane regardless of where you click.
+  The toolbar's collapsed/expanded state is remembered across notes and restarts.
 - **Enable Tab navigation**
 - **Default column alignment**
 - **Interface language** — Auto / English / 中文

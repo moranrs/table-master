@@ -24,8 +24,12 @@ export type FloatingToolbarPosition =
 export interface TableMasterSettings {
   outputFormat: OutputFormat;
   showFloatingToolbar: boolean;
-  toolbarPosition: "floating" | "sidebar";
+  toolbarPosition: "floating" | "sidebar" | "none";
   floatingToolbarPosition: FloatingToolbarPosition;
+  /** Persisted docked (top-left) collapse state of the floating toolbar.
+   *  Kept in settings so every note — including notes opened later — starts
+   *  in the same collapsed/expanded state the user last chose. */
+  floatingToolbarCollapsed: boolean;
   enableTabNavigation: boolean;
   defaultAlign: Align;
   language: LangChoice;
@@ -36,6 +40,7 @@ export const DEFAULT_SETTINGS: TableMasterSettings = {
   showFloatingToolbar: true,
   toolbarPosition: "floating",
   floatingToolbarPosition: "on-click",
+  floatingToolbarCollapsed: false,
   enableTabNavigation: true,
   defaultAlign: "none",
   language: "auto",
@@ -91,10 +96,12 @@ export class TableMasterSettingTab extends PluginSettingTab {
       .addDropdown((dd) => {
         dd.addOption("floating", t("set.toolbarLocation.floating"));
         dd.addOption("sidebar", t("set.toolbarLocation.sidebar"));
+        dd.addOption("none", t("set.toolbarLocation.none"));
         dd.setValue(this.plugin.settings.toolbarPosition);
         dd.onChange(async (v) => {
-          this.plugin.settings.toolbarPosition = v as "floating" | "sidebar";
-          this.plugin.settings.showFloatingToolbar = true;
+          this.plugin.settings.toolbarPosition = v as "floating" | "sidebar" | "none";
+          // `none` disables the toolbar entirely; the other two enable it.
+          this.plugin.settings.showFloatingToolbar = v !== "none";
           await this.plugin.saveSettings();
           await this.plugin.syncToolbarPosition();
           this.display();

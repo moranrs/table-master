@@ -1,8 +1,9 @@
 export const en = {
   "set.toolbarLocation": "Toolbar position",
-  "set.toolbarLocation.desc": "Choose where the table toolbar appears.",
+  "set.toolbarLocation.desc": "Choose where the table toolbar appears, or hide it entirely.",
   "set.toolbarLocation.floating": "Floating",
   "set.toolbarLocation.sidebar": "Sidebar",
+  "set.toolbarLocation.none": "Don't show",
   "cmd.openToolbar": "Open toolbar in sidebar",
 
   // Commands

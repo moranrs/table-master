@@ -49,8 +49,13 @@ export function buildFloatingToolbarExt(host: ToolbarHost) {
       revealed = false;
       /** Remembered collapsed state of the *docked* (top-left) presentation.
        *  When the toolbar jumps next to a cell it is forced expanded (and the
-       *  toggle is hidden), but the docked state is restored on return. */
-      dockedCollapsed = false;
+       *  toggle is hidden), but the docked state is restored on return.
+       *  Backed by the plugin settings so the state is shared across every
+       *  note (including ones opened later) and survives a restart, instead
+       *  of each fresh note resetting to "expanded". */
+      private get dockedCollapsed(): boolean {
+        return host.getPlugin().settings.floatingToolbarCollapsed;
+      }
       lastFrom = -1;
 
       constructor(view: EditorView) {
@@ -520,8 +525,22 @@ export function buildFloatingToolbarExt(host: ToolbarHost) {
 
       /** Restore the remembered docked collapsed/expanded state. */
       private applyDockedState() {
+        // Skip until the first reveal has happened: before the toolbar is
+        // visible the content has zero size, so we couldn't measure its
+        // natural width/height (needed for a smooth later expand animation).
+        if (!this.revealed) return;
         const content = this.dom.querySelector<HTMLElement>(".tm-toolbar-content");
         if (this.dockedCollapsed) {
+          // Capture the natural size once so collapsing now and expanding
+          // later can animate from a concrete pixel width instead of `auto`.
+          if (content && (!content.dataset.tmWidth || !content.dataset.tmHeight)) {
+            const w = content.offsetWidth;
+            const h = content.offsetHeight;
+            if (w > 0 && h > 0) {
+              content.dataset.tmWidth = String(w);
+              content.dataset.tmHeight = String(h);
+            }
+          }
           this.dom.classList.add("is-collapsed");
           if (content && content.dataset.tmWidth && content.dataset.tmHeight) {
             content.setCssProps({
@@ -580,7 +599,7 @@ export function buildFloatingToolbarExt(host: ToolbarHost) {
             lockContentSize();
             void content.offsetWidth;
             this.dom.classList.add("is-collapsed");
-            this.dockedCollapsed = true;
+            host.getPlugin().setFloatingToolbarCollapsed(true);
             this.placeTopLeft(this.view);
             this.clickedInTable = false;
           } else {
@@ -592,7 +611,7 @@ export function buildFloatingToolbarExt(host: ToolbarHost) {
               content.classList.add("is-size-locked");
             }
             this.dom.classList.remove("is-collapsed");
-            this.dockedCollapsed = false;
+            host.getPlugin().setFloatingToolbarCollapsed(false);
             const win = this.view.dom.ownerDocument.defaultView ?? activeWindow;
             win.setTimeout(unlockContentSize, 350);
           }

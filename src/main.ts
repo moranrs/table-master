@@ -34,8 +34,15 @@ function readSettings(data: unknown): Partial<TableMasterSettings> {
   if (!isRecord(data)) return {};
   const settings: Partial<TableMasterSettings> = {};
   if (data.outputFormat === "extended" || data.outputFormat === "html") settings.outputFormat = data.outputFormat;
-  if (data.toolbarPosition === "floating" || data.toolbarPosition === "sidebar") settings.toolbarPosition = data.toolbarPosition;
+  if (
+    data.toolbarPosition === "floating" ||
+    data.toolbarPosition === "sidebar" ||
+    data.toolbarPosition === "none"
+  ) {
+    settings.toolbarPosition = data.toolbarPosition;
+  }
   if (typeof data.showFloatingToolbar === "boolean") settings.showFloatingToolbar = data.showFloatingToolbar;
+  if (typeof data.floatingToolbarCollapsed === "boolean") settings.floatingToolbarCollapsed = data.floatingToolbarCollapsed;
   if (
     data.floatingToolbarPosition === "on-click" ||
     data.floatingToolbarPosition === "follow-mouse" ||
@@ -230,6 +237,18 @@ export default class TableMasterPlugin extends Plugin {
 
   async saveSettings(): Promise<void> {
     await this.saveData(this.settings);
+  }
+
+  /**
+   * Persist the docked (top-left) collapse state of the floating toolbar.
+   * Stored in settings rather than per-toolbar so a newly opened note starts
+   * in the same collapsed/expanded state the user last chose, instead of
+   * always reopening expanded.
+   */
+  setFloatingToolbarCollapsed(collapsed: boolean): void {
+    if (this.settings.floatingToolbarCollapsed === collapsed) return;
+    this.settings.floatingToolbarCollapsed = collapsed;
+    void this.saveSettings();
   }
 
   /**

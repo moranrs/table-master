@@ -126,6 +126,23 @@ describe("sidebar editor targeting and placement", () => {
     Object.assign(plugin, { loadData: async () => ({ toolbarPosition: "sidebar" }) });
     await plugin.loadSettings(); expect(plugin.settings.toolbarPosition).toBe("sidebar");
   });
+  it("restores the 'none' position and persisted collapse state", async () => {
+    Object.assign(plugin, {
+      loadData: async () => ({ toolbarPosition: "none", floatingToolbarCollapsed: true }),
+    });
+    await plugin.loadSettings();
+    expect(plugin.settings.toolbarPosition).toBe("none");
+    expect(plugin.settings.floatingToolbarCollapsed).toBe(true);
+  });
+  it("persists the floating toolbar collapse state", () => {
+    const saveData = vi.fn();
+    Object.assign(plugin, { saveData });
+    plugin.setFloatingToolbarCollapsed(true);
+    expect(plugin.settings.floatingToolbarCollapsed).toBe(true);
+    expect(saveData).toHaveBeenCalledOnce();
+    plugin.setFloatingToolbarCollapsed(true);
+    expect(saveData).toHaveBeenCalledOnce();
+  });
   it("switching to floating detaches sidebar leaves", async () => {
     const detach = vi.fn();
     vi.spyOn(plugin.app.workspace, "getLeavesOfType").mockReturnValue([{ detach } as never]);
