@@ -1,7 +1,7 @@
 {
   "id": "table-master",
   "name": "Table Master",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "minAppVersion": "1.4.0",
   "description": "All-in-one Markdown table workflow: floating toolbar, visual grid editor, and merged-cell support with MultiMarkdown ^^ / || syntax.",
   "author": "moranrs",

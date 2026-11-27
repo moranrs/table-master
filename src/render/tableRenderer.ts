@@ -2,7 +2,7 @@
 // (Obsidian-rendered) HTML table. Used by both the reading-view
 // post-processor and the live-preview view plugin.
 
-import type { App, Component, MarkdownRenderer as MdRenderer } from "obsidian";
+import type { App, Component } from "obsidian";
 import { MarkdownRenderer } from "obsidian";
 import { TableModel } from "../table/model";
 
@@ -33,24 +33,19 @@ export async function applyModelToTable(
   table.className = className;
   table.classList.add("tm-rendered");
 
-  // Build new nodes through the table's own ownerDocument so the markup
-  // also lives in the right document tree when the markdown view is in a
-  // popout window. obsidianmd's `prefer-active-doc` lint rule additionally
-  // forbids referencing the bare `document` global.
-  const doc = table.ownerDocument;
-
+  // Build new nodes through Obsidian's `createEl` helpers on each parent.
+  // They create elements through the parent's own `ownerDocument`, so the
+  // markup also lives in the right document tree when the markdown view is in
+  // a popout window (and no bare `document` global is referenced).
   if (model.caption) {
-    const cap = doc.createElement("caption");
-    cap.textContent = model.caption.text;
-    table.appendChild(cap);
+    table.createEl("caption", { text: model.caption.text });
   }
 
   if (model.headerRows > 0) {
-    const thead = doc.createElement("thead");
+    const thead = table.createEl("thead");
     for (let r = 0; r < model.headerRows; r++) {
-      thead.appendChild(rowToTr(doc, model, r, "th", opts));
+      rowToTr(thead, model, r, "th", opts);
     }
-    table.appendChild(thead);
   }
 
   if (model.rows.length > model.headerRows) {
@@ -58,10 +53,9 @@ export async function applyModelToTable(
     let tbody: HTMLTableSectionElement | null = null;
     for (let r = model.headerRows; r < model.rows.length; r++) {
       if (!tbody || breaks.has(r)) {
-        tbody = doc.createElement("tbody");
-        table.appendChild(tbody);
+        tbody = table.createEl("tbody");
       }
-      tbody.appendChild(rowToTr(doc, model, r, "td", opts));
+      rowToTr(tbody, model, r, "td", opts);
     }
   }
 
@@ -73,17 +67,17 @@ export async function applyModelToTable(
 }
 
 function rowToTr(
-  doc: Document,
+  parent: HTMLTableSectionElement,
   model: TableModel,
   r: number,
   tag: "th" | "td",
   opts: ApplyOptions,
-): HTMLTableRowElement {
-  const tr = doc.createElement("tr");
+): void {
+  const tr = parent.createEl("tr");
   for (let c = 0; c < model.cols; c++) {
     const cell = model.rows[r][c];
     if (!cell.isAnchor) continue;
-    const td = doc.createElement(tag);
+    const td = tr.createEl(tag);
     if (cell.rowspan > 1) td.setAttribute("rowspan", String(cell.rowspan));
     if (cell.colspan > 1) td.setAttribute("colspan", String(cell.colspan));
     const align = model.aligns[c];
@@ -96,13 +90,11 @@ function rowToTr(
       // takes over.
       const pieces = cell.raw.split("\n");
       pieces.forEach((piece, idx) => {
-        if (idx > 0) td.appendChild(doc.createElement("br"));
-        td.appendChild(doc.createTextNode(piece));
+        if (idx > 0) td.createEl("br");
+        td.appendText(piece);
       });
     }
-    tr.appendChild(td);
   }
-  return tr;
 }
 
 async function renderCellsInline(
@@ -111,7 +103,7 @@ async function renderCellsInline(
   opts: ApplyOptions,
 ): Promise<void> {
   const cells = table.querySelectorAll<HTMLTableCellElement>("td[data-tm-row], th[data-tm-row]");
-  const renderer: typeof MdRenderer | null = (MarkdownRenderer ?? null) as unknown as typeof MdRenderer;
+  const renderer = MarkdownRenderer ?? null;
   if (!renderer) return;
   for (const td of Array.from(cells)) {
     const r = parseInt(td.dataset.tmRow ?? "-1", 10);

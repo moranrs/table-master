@@ -57,7 +57,7 @@ export function computeWidgetSelection(table: HTMLTableElement, clicked: Element
   const selected = Array.from(table.querySelectorAll<HTMLElement>(SELECTED_SELECTOR));
   // Always include the clicked cell so a right-click outside the existing
   // selection still defines a valid range.
-  if (clicked instanceof HTMLElement && !selected.includes(clicked)) {
+  if (clicked && clicked.instanceOf(HTMLElement) && !selected.includes(clicked)) {
     selected.push(clicked);
   }
   if (selected.length < 2) return undefined;

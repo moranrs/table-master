@@ -66,8 +66,11 @@ export function buildFloatingToolbarExt(host: ToolbarHost) {
         // `prefer-active-doc` lint rule explicitly forbids referencing the
         // bare `document` / `window` globals.
         const doc = view.dom.ownerDocument;
-        this.dom = doc.createElement("div");
-        this.dom.className = "tm-floating-toolbar";
+        // Create the toolbar and mount it on <body> (see the note below on
+        // why not `view.dom.parentElement`). `createDiv` builds the element
+        // through the body's own document, so popout windows get their own
+        // toolbar instead of one stranded in the main window.
+        this.dom = doc.body.createDiv({ cls: "tm-floating-toolbar" });
         // Tagged so `TableMasterPlugin.onunload` can sweep up any toolbars
         // whose CM6 destroy() hook didn't fire (Obsidian doesn't always
         // reconfigure already-open editor views on plugin unload).
@@ -91,9 +94,6 @@ export function buildFloatingToolbarExt(host: ToolbarHost) {
         // that ancestor instead of the viewport, which is why the user saw
         // the toolbar systematically offset to the bottom-right. <body> is
         // never inside such a transform, so fixed positioning is reliable.
-        // We mount on the editor's own document body so popout windows get
-        // their own toolbar instead of one stranded in the main window.
-        doc.body.appendChild(this.dom);
         this.render();
         // Subscribe to settings broadcasts so the toolbar reacts to a position
         // change without requiring the user to also click in the editor.
@@ -107,7 +107,8 @@ export function buildFloatingToolbarExt(host: ToolbarHost) {
         // mode that needs scroll updates is friction-free.)
         this.scrollListener = () => {
           if (this.raf != null) return;
-          this.raf = requestAnimationFrame(() => {
+          const win = this.view.dom.ownerDocument.defaultView ?? activeWindow;
+          this.raf = win.requestAnimationFrame(() => {
             this.raf = null;
             this.refresh(this.view);
           });
@@ -123,6 +124,13 @@ export function buildFloatingToolbarExt(host: ToolbarHost) {
         // self-gates on the current mode, so it's a no-op while the user is
         // in `follow-mouse` / `top-left` mode.
         this.ensureMouseDownListener();
+        // Install the mousemove listener eagerly as well. It must exist before
+        // the user merely *hovers* a table in `follow-mouse` mode — otherwise
+        // the toolbar would only start following after an initial click (which
+        // is what previously triggered the next CM update). The handler
+        // self-gates on the current mode, so it stays inert for the other
+        // modes and costs nothing until a table is hovered.
+        this.ensureMouseListener();
         this.scheduleInitialReveal();
       }
 
@@ -176,7 +184,10 @@ export function buildFloatingToolbarExt(host: ToolbarHost) {
         const win = doc.defaultView ?? activeWindow;
         this.dom.remove();
         if (this.mouseListener) {
-          this.view.dom.removeEventListener("mousemove", this.mouseListener);
+          doc.removeEventListener("mousemove", this.mouseListener, true);
+          doc.removeEventListener("pointermove", this.mouseListener, true);
+          doc.removeEventListener("mouseover", this.mouseListener, true);
+          doc.removeEventListener("pointerover", this.mouseListener, true);
           this.mouseListener = null;
         }
         if (this.mouseDownListener) {
@@ -193,7 +204,7 @@ export function buildFloatingToolbarExt(host: ToolbarHost) {
           this.scrollListener = null;
         }
         if (this.raf != null) {
-          cancelAnimationFrame(this.raf);
+          win.cancelAnimationFrame(this.raf);
           this.raf = null;
         }
       }
@@ -202,10 +213,9 @@ export function buildFloatingToolbarExt(host: ToolbarHost) {
       refresh(view: EditorView) {
         const settings = host.getPlugin().settings;
         if ((!settings.showFloatingToolbar || settings.toolbarPosition !== "floating")) {
-          this.removeMouseListener();
-          // Note: we do NOT remove the mousedown listener here; it self-gates
-          // on `showFloatingToolbar` and must stay attached so re-enabling
-          // the toolbar doesn't require re-loading the plugin.
+          // Both mouse listeners are installed for the plugin's lifetime and
+          // self-gate on the current settings, so re-enabling the toolbar does
+          // not require re-loading or an extra click. Just hide for now.
           this.hide();
           return;
         }
@@ -237,7 +247,7 @@ export function buildFloatingToolbarExt(host: ToolbarHost) {
         const rawMode = settings.floatingToolbarPosition as string;
         const mode: FloatingToolbarPosition =
           rawMode === "follow-mouse" || rawMode === "top-left" || rawMode === "click-only"
-            ? (rawMode as FloatingToolbarPosition)
+            ? rawMode
             : "on-click";
         const parent = view.dom.parentElement;
         if (!parent) {
@@ -247,9 +257,10 @@ export function buildFloatingToolbarExt(host: ToolbarHost) {
 
         const inTable = this.hasTableContext();
 
-        // Only `follow-mouse` needs the continuous mousemove listener.
-        if (mode === "follow-mouse") this.ensureMouseListener();
-        else this.removeMouseListener();
+        // The continuous mousemove listener was installed once in the
+        // constructor and self-gates on the current mode, so `follow-mouse`
+        // works immediately after switching modes — no initial click needed.
+        this.ensureMouseListener();
 
         // `click-only`: hidden until the user clicks a table cell.
         if (mode === "click-only") {
@@ -294,11 +305,28 @@ export function buildFloatingToolbarExt(host: ToolbarHost) {
       /** Make the toolbar measurable & visible without leaving it at a stale position. */
       private ensureVisible() {
         if (!this.revealed) return;
+        this.hideOtherToolbars();
         this.dom.hidden = false;
         if (this.dom.classList.contains("is-hidden")) {
           this.dom.classList.remove("is-hidden");
           this.visible = true;
         }
+      }
+
+      /**
+       * Only one floating toolbar may be visible per window. A note can have
+       * several editor instances alive (split panes, hover editors, popovers),
+       * and a hot-reloaded build can leave a stale toolbar behind; without this
+       * the toolbar could appear twice (one of them just a collapsed toggle
+       * pill sitting next to the real toolbar).
+       */
+      private hideOtherToolbars() {
+        const doc = this.view.dom.ownerDocument;
+        doc.querySelectorAll<HTMLElement>('[data-tm-floating-toolbar="1"]').forEach((el) => {
+          if (el === this.dom) return;
+          el.classList.add("is-hidden");
+          el.hidden = true;
+        });
       }
 
       /** Reveal only after two animation frames so the plugin stylesheet and
@@ -321,46 +349,78 @@ export function buildFloatingToolbarExt(host: ToolbarHost) {
       private ensureMouseListener() {
         if (this.mouseListener) return;
         const fn = (e: MouseEvent) => {
-          // Cache pointer coords + table-hover flag immediately so the next
-          // animation frame sees the latest values; defer the actual
-          // measurement / DOM write to rAF so we don't read layout on every
-          // mousemove tick.
-          this.clientX = e.clientX;
-          this.clientY = e.clientY;
           const target = e.target as HTMLElement | null;
-          this.hoveredCell = target?.closest?.("td, th") ?? null;
-          this.mouseInTable = !!target?.closest?.("table");
+          // Ignore pointer movement over the toolbar itself (it lives on
+          // <body>) so hovering it to click a button never yanks it away.
+          if (target && this.dom.contains(target)) return;
+          // Only react to moves inside this editor pane.
+          if (!target || !this.view.dom.contains(target)) return;
           const settings = host.getPlugin().settings;
           if ((!settings.showFloatingToolbar || settings.toolbarPosition !== "floating")) return;
           if (settings.floatingToolbarPosition !== "follow-mouse") return;
+          // The element actually under the pointer tells us precisely whether
+          // we are over a table — no coordinate guessing that would also fire
+          // over the empty space beside a table.
+          this.clientX = e.clientX;
+          this.clientY = e.clientY;
+          this.hoveredCell = target.closest?.("td, th") ?? null;
+          this.mouseInTable = !!target.closest?.("table");
           if (this.raf != null) return;
-          this.raf = requestAnimationFrame(() => {
+          const win = this.view.dom.ownerDocument.defaultView ?? activeWindow;
+          this.raf = win.requestAnimationFrame(() => {
             this.raf = null;
-            // Place directly here instead of going through refresh(). refresh
-            // intentionally never calls placeAtMouse so non-mouse updates
-            // (clicks, typing, focus changes) can't snap the toolbar to the
-            // pointer; mousemove is the only thing that's allowed to.
             const rect = this.view.dom.getBoundingClientRect();
             if (rect.width === 0 || rect.height === 0) return;
+            // DOM-rect fallback for cases where the table widget swallows the
+            // event target (e.g. pointer-events styling): if the pointer is
+            // geometrically inside a rendered table, treat it as hovering it.
+            const hit = this.hitTestTable(this.clientX, this.clientY);
+            const inTable = this.mouseInTable || hit.inTable;
+            const cell = this.hoveredCell ?? hit.cell;
+            this.mouseInTable = inTable;
+            this.hoveredCell = cell;
             this.ensureVisible();
-            if (this.mouseInTable && !this.dom.classList.contains("is-collapsed")) {
-              if (this.hoveredCell) this.placeNearCell(this.hoveredCell);
-              else this.placeAtMouse();
+            if (inTable) {
+              if (cell) this.placeNearCell(cell);
+              else this.placeAtMouse(true);
             } else {
               this.placeTopLeft(this.view);
             }
           });
         };
-        this.view.dom.addEventListener("mousemove", fn);
+        // Listen on the document in the capture phase so Obsidian's Live
+        // Preview table widget (which can stop propagation in the bubble
+        // phase) can't hide hover events from us. Scoped to events whose
+        // target is inside this editor, so other panes don't react.
+        const doc = this.view.dom.ownerDocument;
+        doc.addEventListener("mousemove", fn, true);
+        doc.addEventListener("pointermove", fn, true);
+        doc.addEventListener("mouseover", fn, true);
+        doc.addEventListener("pointerover", fn, true);
         this.mouseListener = fn;
       }
 
-      private removeMouseListener() {
-        if (!this.mouseListener) return;
-        this.view.dom.removeEventListener("mousemove", this.mouseListener);
-        this.mouseListener = null;
-        this.mouseInTable = false;
-        this.hoveredCell = null;
+      /** Find the table cell (if any) under a viewport-space point. */
+      private hitTestTable(x: number, y: number): { cell: HTMLElement | null; inTable: boolean } {
+        // Prefer tables that live inside this editor; fall back to the whole
+        // document in case a renderer places the table in a sibling node.
+        const root: ParentNode = this.view.dom.querySelector("table")
+          ? this.view.dom
+          : this.view.dom.ownerDocument;
+        const tables = root.querySelectorAll<HTMLTableElement>("table");
+        for (const table of Array.from(tables)) {
+          const tr = table.getBoundingClientRect();
+          if (x < tr.left || x > tr.right || y < tr.top || y > tr.bottom) continue;
+          const cells = table.querySelectorAll<HTMLElement>("td, th");
+          for (const cell of Array.from(cells)) {
+            const cr = cell.getBoundingClientRect();
+            if (x >= cr.left && x <= cr.right && y >= cr.top && y <= cr.bottom) {
+              return { cell, inTable: true };
+            }
+          }
+          return { cell: null, inTable: true };
+        }
+        return { cell: null, inTable: false };
       }
 
       /**
@@ -452,7 +512,7 @@ export function buildFloatingToolbarExt(host: ToolbarHost) {
       private hasTableContext(): boolean {
         const sel = this.view.dom.ownerDocument.getSelection();
         const node = sel?.anchorNode;
-        const anchor = node instanceof HTMLElement ? node : node?.parentElement;
+        const anchor = node && node.instanceOf(HTMLElement) ? node : node?.parentElement;
         const table = anchor?.closest?.("table");
         if (table && this.view.dom.contains(table)) return true;
 
@@ -492,7 +552,7 @@ export function buildFloatingToolbarExt(host: ToolbarHost) {
        * shows up exactly at the click point. Clamp to the viewport so the
        * toolbar is never partially off-screen.
        */
-      private placeAtMouse() {
+      private placeAtMouse(offset = false) {
         // `position: fixed` lives in styles.css; only the dynamic top/left
         // are set inline (see comment in placeTopLeft).
         const myWidth = this.dom.offsetWidth || 200;
@@ -502,8 +562,12 @@ export function buildFloatingToolbarExt(host: ToolbarHost) {
         const win = this.view.dom.ownerDocument.defaultView ?? activeWindow;
         const maxLeft = win.innerWidth - myWidth - 4;
         const maxTop = win.innerHeight - myHeight - 4;
-        const left = Math.min(Math.max(this.clientX, 4), Math.max(maxLeft, 4));
-        const top = Math.min(Math.max(this.clientY, 4), Math.max(maxTop, 4));
+        // For hover-following, nudge the toolbar off the cursor so it doesn't
+        // sit underneath the pointer (which would swallow the next mousemove).
+        const dx = offset ? 14 : 0;
+        const dy = offset ? 18 : 0;
+        const left = Math.min(Math.max(this.clientX + dx, 4), Math.max(maxLeft, 4));
+        const top = Math.min(Math.max(this.clientY + dy, 4), Math.max(maxTop, 4));
         this.dom.style.top = `${top}px`;
         this.dom.style.left = `${left}px`;
         this.dom.classList.add("is-near-cell");

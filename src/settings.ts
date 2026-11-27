@@ -54,6 +54,47 @@ export class TableMasterSettingTab extends PluginSettingTab {
     this.plugin = plugin;
   }
 
+  /**
+   * Declarative settings definitions (Obsidian 1.13.0+). Returning a non-empty
+   * array makes Obsidian render and index the tab from these definitions and
+   * skip `display()`. Each control is built by the same helper `display()`
+   * uses, so the two code paths cannot drift. Older Obsidian versions ignore
+   * this method and keep calling `display()`.
+   */
+  getSettingDefinitions() {
+    return [
+      {
+        name: t("set.language"),
+        render: (setting: Setting) => this.buildLanguageControl(setting),
+      },
+      {
+        name: t("set.outputFormat"),
+        desc: t("set.outputFormat.desc"),
+        render: (setting: Setting) => this.buildOutputFormatControl(setting),
+      },
+      {
+        name: t("set.toolbarLocation"),
+        desc: t("set.toolbarLocation.desc"),
+        render: (setting: Setting) => this.buildToolbarLocationControl(setting),
+      },
+      {
+        name: t("set.toolbarPosition"),
+        desc: t("set.toolbarPosition.desc"),
+        visible: () => this.plugin.settings.toolbarPosition === "floating",
+        render: (setting: Setting) => this.buildFloatingPositionControl(setting),
+      },
+      {
+        name: t("set.tabNavigation"),
+        desc: t("set.tabNavigation.desc"),
+        render: (setting: Setting) => this.buildTabNavigationControl(setting),
+      },
+      {
+        name: t("set.defaultAlign"),
+        render: (setting: Setting) => this.buildDefaultAlignControl(setting),
+      },
+    ];
+  }
+
   display(): void {
     const { containerEl } = this;
     containerEl.empty();
@@ -61,100 +102,131 @@ export class TableMasterSettingTab extends PluginSettingTab {
     // automatically, so we don't add a manual <h2> here (which would also
     // trip `obsidianmd/settings-tab/no-manual-html-headings`).
 
-    new Setting(containerEl)
-      .setName(t("set.language"))
-      .addDropdown((dd) => {
-        dd.addOption("auto", t("set.language.auto"));
-        dd.addOption("en", t("set.language.en"));
-        dd.addOption("zh", t("set.language.zh"));
-        dd.addOption("zh-TW", t("set.language.zhTW"));
-        dd.setValue(this.plugin.settings.language);
-        dd.onChange(async (v) => {
-          this.plugin.settings.language = v as LangChoice;
-          setLanguage(this.plugin.settings.language);
-          await this.plugin.saveSettings();
-          this.display();
-        });
-      });
+    this.buildLanguageControl(new Setting(containerEl).setName(t("set.language")));
 
-    new Setting(containerEl)
-      .setName(t("set.outputFormat"))
-      .setDesc(t("set.outputFormat.desc"))
-      .addDropdown((dd) => {
-        dd.addOption("extended", t("set.outputFormat.extended"));
-        dd.addOption("html", t("set.outputFormat.html"));
-        dd.setValue(this.plugin.settings.outputFormat);
-        dd.onChange(async (v) => {
-          this.plugin.settings.outputFormat = v as OutputFormat;
-          await this.plugin.saveSettings();
-        });
-      });
+    this.buildOutputFormatControl(
+      new Setting(containerEl)
+        .setName(t("set.outputFormat"))
+        .setDesc(t("set.outputFormat.desc")),
+    );
 
-    new Setting(containerEl)
-      .setName(t("set.toolbarLocation"))
-      .setDesc(t("set.toolbarLocation.desc"))
-      .addDropdown((dd) => {
-        dd.addOption("floating", t("set.toolbarLocation.floating"));
-        dd.addOption("sidebar", t("set.toolbarLocation.sidebar"));
-        dd.addOption("none", t("set.toolbarLocation.none"));
-        dd.setValue(this.plugin.settings.toolbarPosition);
-        dd.onChange(async (v) => {
-          this.plugin.settings.toolbarPosition = v as "floating" | "sidebar" | "none";
-          // `none` disables the toolbar entirely; the other two enable it.
-          this.plugin.settings.showFloatingToolbar = v !== "none";
-          await this.plugin.saveSettings();
-          await this.plugin.syncToolbarPosition();
-          this.display();
-        });
-      });
+    this.buildToolbarLocationControl(
+      new Setting(containerEl)
+        .setName(t("set.toolbarLocation"))
+        .setDesc(t("set.toolbarLocation.desc")),
+    );
 
     if (this.plugin.settings.toolbarPosition === "floating") {
-      new Setting(containerEl)
-        .setName(t("set.toolbarPosition"))
-        .setDesc(t("set.toolbarPosition.desc"))
-        .addDropdown((dd) => {
-          dd.addOption("on-click", t("set.toolbarPosition.onClick"));
-          dd.addOption("follow-mouse", t("set.toolbarPosition.followMouse"));
-          dd.addOption("top-left", t("set.toolbarPosition.topLeft"));
-          dd.addOption("click-only", t("set.toolbarPosition.clickOnly"));
-          // Old config files may still hold the removed `above-table` value;
-          // fall back to the new default so the dropdown shows a valid choice.
-          const current = (this.plugin.settings.floatingToolbarPosition as string) === "above-table"
-            ? "on-click"
-            : this.plugin.settings.floatingToolbarPosition;
-          dd.setValue(current);
-          dd.onChange(async (v) => {
-            this.plugin.settings.floatingToolbarPosition = v as FloatingToolbarPosition;
-            await this.plugin.saveSettings();
-            this.plugin.broadcastSettingsChanged();
-          });
-        });
-
+      this.buildFloatingPositionControl(
+        new Setting(containerEl)
+          .setName(t("set.toolbarPosition"))
+          .setDesc(t("set.toolbarPosition.desc")),
+      );
     }
 
-    new Setting(containerEl)
-      .setName(t("set.tabNavigation"))
-      .setDesc(t("set.tabNavigation.desc"))
-      .addToggle((tg) => {
-        tg.setValue(this.plugin.settings.enableTabNavigation);
-        tg.onChange(async (v) => {
-          this.plugin.settings.enableTabNavigation = v;
-          await this.plugin.saveSettings();
-        });
-      });
+    this.buildTabNavigationControl(
+      new Setting(containerEl)
+        .setName(t("set.tabNavigation"))
+        .setDesc(t("set.tabNavigation.desc")),
+    );
 
-    new Setting(containerEl)
-      .setName(t("set.defaultAlign"))
-      .addDropdown((dd) => {
-        dd.addOption("none", "—");
-        dd.addOption("left", t("modal.alignLeft"));
-        dd.addOption("center", t("modal.alignCenter"));
-        dd.addOption("right", t("modal.alignRight"));
-        dd.setValue(this.plugin.settings.defaultAlign);
-        dd.onChange(async (v) => {
-          this.plugin.settings.defaultAlign = v as Align;
-          await this.plugin.saveSettings();
-        });
+    this.buildDefaultAlignControl(new Setting(containerEl).setName(t("set.defaultAlign")));
+  }
+
+  /** Re-render after a change: declarative update on 1.13+, else display(). */
+  private refreshTab(): void {
+    const tab = this as unknown as { update?: () => void };
+    if (typeof tab.update === "function") tab.update();
+    else this.display();
+  }
+
+  private buildLanguageControl(setting: Setting): void {
+    setting.addDropdown((dd) => {
+      dd.addOption("auto", t("set.language.auto"));
+      dd.addOption("en", t("set.language.en"));
+      dd.addOption("zh", t("set.language.zh"));
+      dd.addOption("zh-TW", t("set.language.zhTW"));
+      dd.setValue(this.plugin.settings.language);
+      dd.onChange(async (v) => {
+        this.plugin.settings.language = v as LangChoice;
+        setLanguage(this.plugin.settings.language);
+        await this.plugin.saveSettings();
+        this.refreshTab();
       });
+    });
+  }
+
+  private buildOutputFormatControl(setting: Setting): void {
+    setting.addDropdown((dd) => {
+      dd.addOption("extended", t("set.outputFormat.extended"));
+      dd.addOption("html", t("set.outputFormat.html"));
+      dd.setValue(this.plugin.settings.outputFormat);
+      dd.onChange(async (v) => {
+        this.plugin.settings.outputFormat = v as OutputFormat;
+        await this.plugin.saveSettings();
+      });
+    });
+  }
+
+  private buildToolbarLocationControl(setting: Setting): void {
+    setting.addDropdown((dd) => {
+      dd.addOption("floating", t("set.toolbarLocation.floating"));
+      dd.addOption("sidebar", t("set.toolbarLocation.sidebar"));
+      dd.addOption("none", t("set.toolbarLocation.none"));
+      dd.setValue(this.plugin.settings.toolbarPosition);
+      dd.onChange(async (v) => {
+        this.plugin.settings.toolbarPosition = v as "floating" | "sidebar" | "none";
+        // `none` disables the toolbar entirely; the other two enable it.
+        this.plugin.settings.showFloatingToolbar = v !== "none";
+        await this.plugin.saveSettings();
+        await this.plugin.syncToolbarPosition();
+        this.refreshTab();
+      });
+    });
+  }
+
+  private buildFloatingPositionControl(setting: Setting): void {
+    setting.addDropdown((dd) => {
+      dd.addOption("on-click", t("set.toolbarPosition.onClick"));
+      dd.addOption("follow-mouse", t("set.toolbarPosition.followMouse"));
+      dd.addOption("top-left", t("set.toolbarPosition.topLeft"));
+      dd.addOption("click-only", t("set.toolbarPosition.clickOnly"));
+      // Old config files may still hold the removed `above-table` value;
+      // fall back to the new default so the dropdown shows a valid choice.
+      const current =
+        (this.plugin.settings.floatingToolbarPosition as string) === "above-table"
+          ? "on-click"
+          : this.plugin.settings.floatingToolbarPosition;
+      dd.setValue(current);
+      dd.onChange(async (v) => {
+        this.plugin.settings.floatingToolbarPosition = v as FloatingToolbarPosition;
+        await this.plugin.saveSettings();
+        this.plugin.broadcastSettingsChanged();
+      });
+    });
+  }
+
+  private buildTabNavigationControl(setting: Setting): void {
+    setting.addToggle((tg) => {
+      tg.setValue(this.plugin.settings.enableTabNavigation);
+      tg.onChange(async (v) => {
+        this.plugin.settings.enableTabNavigation = v;
+        await this.plugin.saveSettings();
+      });
+    });
+  }
+
+  private buildDefaultAlignControl(setting: Setting): void {
+    setting.addDropdown((dd) => {
+      dd.addOption("none", "—");
+      dd.addOption("left", t("modal.alignLeft"));
+      dd.addOption("center", t("modal.alignCenter"));
+      dd.addOption("right", t("modal.alignRight"));
+      dd.setValue(this.plugin.settings.defaultAlign);
+      dd.onChange(async (v) => {
+        this.plugin.settings.defaultAlign = v as Align;
+        await this.plugin.saveSettings();
+      });
+    });
   }
 }

@@ -192,7 +192,7 @@ export class GridEditorModal extends Modal {
 
   private firstSelected(): CellPos | null {
     if (!this.selectedCells.size) return null;
-    const first = this.selectedCells.values().next().value as string | undefined;
+    const first = this.selectedCells.values().next().value;
     if (!first) return null;
     const [r, c] = first.split(":").map(Number);
     return { r, c };

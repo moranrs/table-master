@@ -203,7 +203,10 @@ export default class TableMasterPlugin extends Plugin {
   getTargetMarkdownView(): MarkdownView | null {
     const active = this.app.workspace.getActiveViewOfType(MarkdownView);
     if (active) return active.getMode() === "source" ? active : null;
-    if (this.app.workspace.activeLeaf?.view.getViewType() !== TOOLBAR_VIEW_TYPE) return null;
+    // When focus is in our custom sidebar toolbar view, fall back to the last
+    // active markdown view. `getActiveViewOfType` is the supported replacement
+    // for the deprecated `workspace.activeLeaf`.
+    if (!this.app.workspace.getActiveViewOfType(SidebarToolbar)) return null;
     const target = this.lastMarkdownView;
     let attached = false;
     this.app.workspace.iterateAllLeaves((leaf) => { if (leaf.view === target) attached = true; });

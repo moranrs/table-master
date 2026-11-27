@@ -183,10 +183,11 @@ function upgradeLiteralBrs(el: HTMLElement): void {
     if (pieces.length === 1) continue;
     const parent = text.parentNode;
     if (!parent) continue;
-    const frag = doc.createDocumentFragment();
-    pieces.forEach((piece, idx) => {
-      if (idx > 0) frag.appendChild(doc.createElement("br"));
-      if (piece) frag.appendChild(doc.createTextNode(piece));
+    const frag = createFragment((fragment) => {
+      pieces.forEach((piece, idx) => {
+        if (idx > 0) fragment.createEl("br");
+        if (piece) fragment.appendText(piece);
+      });
     });
     parent.replaceChild(frag, text);
   }

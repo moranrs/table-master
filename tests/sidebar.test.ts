@@ -9,7 +9,7 @@ vi.mock("obsidian", () => {
 
 import { Command, Editor, EditorTransaction, MarkdownView } from "obsidian";
 import TableMasterPlugin from "../src/main";
-import { TOOLBAR_VIEW_TYPE } from "../src/ui/sidebarToolbar";
+import { SidebarToolbar, TOOLBAR_VIEW_TYPE } from "../src/ui/sidebarToolbar";
 import { DEFAULT_SETTINGS } from "../src/settings";
 import { parseTable } from "../src/table/parser";
 import { serialize } from "../src/table/serializer";
@@ -29,7 +29,13 @@ describe("sidebar editor targeting and placement", () => {
     plugin = new TableMasterPlugin(null!, null!);
     Object.assign(plugin, {
       app: { workspace: {
-        getActiveViewOfType: () => active,
+        getActiveViewOfType: (type: unknown) => {
+          if (type === MarkdownView) return active;
+          // Simulate keyboard focus being in the custom sidebar toolbar view
+          // (the non-deprecated replacement for `workspace.activeLeaf`).
+          if (type === SidebarToolbar) return activeType === TOOLBAR_VIEW_TYPE ? {} : null;
+          return null;
+        },
         activeLeaf: { view: { getViewType: () => activeType } },
         iterateAllLeaves: (fn: (leaf: { view: MarkdownView }) => void) => attached.forEach(view => fn({ view })),
         getLeavesOfType: () => [],
